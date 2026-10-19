@@ -1,0 +1,2153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="odo">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="icon" href="/icons/icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Odo</title>
+<style>
+/* Layout: native-feeling phone app. One column, large titles, grouped cards, fixed tab bar.
+   One committed look: OLED black. The only color is each dream's own palette, rendered live by a shader. */
+:root{
+  --bg:#000; --card:#141416; --card-2:#1E1E21; --line:rgba(255,255,255,.09);
+  --fg:#FFFFFF; --muted:rgba(235,235,245,.6); --faint:rgba(235,235,245,.32);
+  --red:#FF453A; --glow:#F2E6D0;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue","PingFang SC",sans-serif;
+  --round:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --gutter:16px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg)}
+body{font:16px/1.4 var(--sans);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;letter-spacing:-.01em}
+button{font:inherit;color:inherit;letter-spacing:inherit;cursor:pointer;background:none;border:0;padding:0}
+:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.app{position:relative;z-index:1;max-width:520px;margin:0 auto;padding-inline:var(--gutter);padding-block:0 calc(96px + env(safe-area-inset-bottom,0px))}
+.view{display:flex;flex-direction:column}
+.bleed{margin-inline:calc(var(--gutter) * -1)}
+@media (min-width:560px){.bleed{margin-inline:0}}
+.large{margin:0;padding-top:20px;font-size:34px;font-weight:700;letter-spacing:-.025em;line-height:1.1}
+.sub{font-size:15px;color:var(--muted)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+.card{background:var(--card);border-radius:16px;overflow:hidden}
+.card-h{margin:28px 4px 8px;font-size:20px;font-weight:700;letter-spacing:-.02em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:50px;padding:0 22px;border-radius:999px;font-size:16px;font-weight:600}
+.btn.white{background:#fff;color:#000}
+.btn.glass{background:rgba(255,255,255,.12);color:#fff;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.btn:disabled{opacity:.5;cursor:default}
+.textlink{font-size:15px;color:var(--muted);font-weight:500}
+
+/* ambient shader behind the record screen */
+#ambient{position:fixed;inset:0;width:100%;height:100%;z-index:0;opacity:0;transition:opacity .8s}
+body[data-tab="record"] #ambient,body[data-tab="auth"] #ambient{opacity:1}
+.amb-shade{position:fixed;inset:0;z-index:0;pointer-events:none;background:linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,0) 30%,rgba(0,0,0,.15) 60%,rgba(0,0,0,.85));opacity:0;transition:opacity .8s}
+body[data-tab="record"] .amb-shade,body[data-tab="auth"] .amb-shade{opacity:1}
+
+/* ---------- record ---------- */
+#view-record{min-height:calc(100dvh - 96px - env(safe-area-inset-bottom,0px) - env(safe-area-inset-top,0px));padding-top:14px}
+.rec-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.logo{font-family:var(--round);font-weight:800;font-size:30px;letter-spacing:-.04em;line-height:1}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.12);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);font-size:13px;font-weight:600}
+.rec-mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px 0 10px;text-align:center}
+.live{min-height:3.9em;max-width:22ch;font-size:24px;font-weight:700;line-height:1.3;letter-spacing:-.02em;display:flex;align-items:flex-end;justify-content:center;-webkit-mask-image:linear-gradient(transparent,#000 40%);mask-image:linear-gradient(transparent,#000 40%)}
+.live span{color:var(--muted)}
+.recwrap{position:relative;width:260px;height:260px;display:grid;place-items:center}
+.recwrap canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.orb{position:relative;width:124px;height:124px;border-radius:50%;display:grid;place-items:center;color:#fff;
+  background:radial-gradient(circle at 34% 26%,rgba(255,255,255,.46),rgba(255,255,255,.1) 40%,rgba(255,255,255,.03) 68%,rgba(255,255,255,.14));
+  border:1px solid rgba(255,255,255,.36);backdrop-filter:blur(16px) saturate(1.5);-webkit-backdrop-filter:blur(16px) saturate(1.5);
+  box-shadow:inset 0 2px 2px rgba(255,255,255,.45),inset 0 -16px 30px rgba(255,255,255,.07),0 24px 60px rgba(0,0,0,.35);
+  transition:transform .4s cubic-bezier(.3,.7,.3,1)}
+.orb:active{transform:scale(.95)}
+.orb[aria-pressed="true"]{transform:scale(1.07)}
+.orb svg{width:34px;height:34px;transition:opacity .2s,transform .3s}
+.orb .stop{position:absolute;width:26px;height:26px;border-radius:8px;background:#fff;opacity:0;transform:scale(.4);transition:opacity .2s,transform .35s cubic-bezier(.3,.7,.3,1)}
+.orb[aria-pressed="true"] svg{opacity:0;transform:scale(.5)}
+.orb[aria-pressed="true"] .stop{opacity:.95;transform:scale(1)}
+.top-r{display:flex;align-items:center;gap:8px}
+.avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:15px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.avatar.xl{width:60px;height:60px;font-size:26px;flex:none}
+.rec-label{margin:0;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.rec-label .tdim{color:var(--muted);font-weight:500}
+.help{margin:0;max-width:30ch;font-size:14px;line-height:1.4;color:var(--muted)}
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:rgba(255,255,255,.1);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.seg button{padding:6px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:rgba(255,255,255,.9);color:#000}
+.rec-bottom{display:flex;flex-direction:column;gap:12px;padding-bottom:6px}
+.composer{background:rgba(20,20,22,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-radius:20px;padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px}
+.composer textarea{width:100%;min-height:110px;max-height:40vh;resize:none;border:0;background:transparent;color:#fff;font:17px/1.45 var(--sans);letter-spacing:-.01em;padding:0}
+.composer textarea::placeholder{color:var(--faint)}
+.composer textarea:focus{outline:none}
+.cues{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-inline:-2px}
+.cues::-webkit-scrollbar{display:none}
+.cue{flex:none;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.1);font-size:13.5px;font-weight:500;color:rgba(255,255,255,.85)}
+.rec-actions{display:flex;gap:10px}
+.rec-actions .btn{flex:1}
+.making{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;min-height:60vh}
+.spinner{width:64px;height:64px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:#fff;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.making h2{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em}
+.making p{margin:0}
+
+/* ---------- dreams ---------- */
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.head .sub{padding-bottom:6px}
+.search{position:relative;margin-top:12px}
+.search input{width:100%;height:38px;border:0;border-radius:11px;padding:0 12px 0 34px;background:var(--card-2);color:#fff;font:17px var(--sans);letter-spacing:-.01em}
+.search input::placeholder{color:var(--faint)}
+.search input:focus{outline:none}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--faint)}
+.filter{margin-top:12px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--card);font-size:15px}
+.filter b{font-weight:600}
+.filter button{margin-left:auto;color:var(--muted);font-weight:600}
+.feature{position:relative;display:block;margin-top:16px;aspect-ratio:4/5;border-radius:20px;overflow:hidden;background:#111;text-align:left}
+.feature img,.tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.feature .over,.tile .over{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:3px;background:linear-gradient(transparent,rgba(0,0,0,.75))}
+.feature .over{padding:80px 18px 18px}
+.feature .k{font-size:13px;font-weight:600;color:rgba(255,255,255,.75)}
+.feature .t{font-size:28px;font-weight:700;letter-spacing:-.025em;line-height:1.1;text-wrap:balance}
+.feature .play{position:absolute;top:14px;right:14px;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.35);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.month{grid-column:1/-1;margin:22px 2px 2px;font-size:20px;font-weight:700;letter-spacing:-.02em}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.tile{position:relative;display:block;width:100%;aspect-ratio:9/14;border-radius:14px;overflow:hidden;background:#111;text-align:left}
+.tile .over{padding:40px 10px 10px}
+.tile .t{font-size:15px;font-weight:600;line-height:1.2;letter-spacing:-.015em}
+.tile .k{font-size:12px;color:rgba(255,255,255,.7);font-weight:500}
+.tile .ex{position:absolute;top:8px;left:8px;padding:3px 8px;border-radius:999px;background:rgba(0,0,0,.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:11px;font-weight:600}
+.empty{margin-top:40px;text-align:center;color:var(--muted)}
+.empty h2{margin:0 0 6px;color:#fff;font-size:20px;font-weight:700}
+.samples-toggle{align-self:center;margin-top:22px}
+
+/* ---------- film ---------- */
+body[data-tab="film"] .tabbar,body[data-tab="auth"] .tabbar{display:none}
+/* ---------- sign in + profile ---------- */
+.auth{min-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;justify-content:center;gap:24px;padding-block:32px 24px}
+.auth-brand{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.logo.big{font-size:68px}
+.auth-card{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:24px;background:rgba(20,20,22,.58);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.seg.wide{display:flex}
+.seg.wide button{flex:1}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--muted)}
+.field input,.inline-input{height:48px;border:0;border-radius:12px;padding:0 14px;background:rgba(255,255,255,.08);color:#fff;font:17px var(--sans);letter-spacing:-.01em}
+.inline-input{width:100%;background:transparent}
+.field input:focus,.inline-input:focus{outline:2px solid rgba(255,255,255,.45);outline-offset:0}
+.auth-msg{margin:0;font-size:14px;line-height:1.4;color:var(--muted)}
+.auth-msg.err{color:#FF8A80}
+#guestBtn,#forgotBtn{align-self:center}
+.prof-top{display:flex;align-items:center;gap:14px;padding:16px;margin-top:16px}
+.prof-name{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.signout{width:100%;padding:14px;text-align:center;font-weight:600}
+body[data-tab="film"] .app{padding-bottom:calc(30px + env(safe-area-inset-bottom,0px))}
+.stage{position:relative;margin-inline:auto;width:100%;max-width:calc(100dvh * 9 / 16);aspect-ratio:9/16;background:#000;overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none;cursor:pointer}
+@media (min-width:560px){.stage{border-radius:18px;margin-top:16px;max-width:calc(86dvh * 9 / 16)}}
+.stage canvas{display:block;width:100%;height:100%}
+.segs{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:10px;right:10px;display:flex;gap:4px;pointer-events:none}
+.segs i{flex:1;height:2.5px;border-radius:2px;background:rgba(255,255,255,.3);overflow:hidden}
+.segs i b{display:block;height:100%;width:0;background:#fff}
+.icon{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;color:#fff;background:rgba(0,0,0,.28);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.back{position:absolute;top:calc(22px + env(safe-area-inset-top,0px));left:10px}
+.rail{position:absolute;right:10px;top:calc(22px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:16px;align-items:center}
+.rail button{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11.5px;font-weight:600;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+.rail .icon{width:46px;height:46px}
+.paused{position:absolute;inset:0;margin:auto;width:72px;height:72px;border-radius:50%;display:grid;place-items:center;color:#fff;background:rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);pointer-events:none}
+.recpill{position:absolute;top:calc(26px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:7px 12px;border-radius:999px;background:rgba(0,0,0,.55);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.recpill::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red);margin-right:7px;vertical-align:0;animation:blink 1.1s steps(2) infinite}
+@keyframes blink{50%{opacity:.25}}
+.film-info{padding:18px 2px 0;display:flex;flex-direction:column;gap:8px}
+.film-info h1{margin:0;font-size:28px;font-weight:700;letter-spacing:-.025em;line-height:1.12;text-wrap:balance}
+.meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;font-size:14px;color:var(--muted)}
+.logline{margin:0;font-size:16px;line-height:1.45;color:rgba(255,255,255,.85)}
+.note{margin:4px 0 0;padding:10px 12px;border-radius:12px;background:var(--card);font-size:14px;color:var(--muted)}
+.rows{list-style:none;margin:0;padding:0}
+.rows > li + li{border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;width:100%;padding:12px 14px;text-align:left}
+.row .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--card-2);font-size:12.5px;font-weight:700;color:var(--muted)}
+.row.on .n{background:#fff;color:#000}
+.row .c{font-size:16px;line-height:1.35}
+.row .s{display:block;margin-top:2px;font-size:13px;color:var(--muted)}
+.row img{width:40px;height:56px;border-radius:7px;object-fit:cover;display:block;background:#111}
+.chev{color:var(--faint)}
+.tags{padding:14px;display:flex;flex-direction:column;gap:12px}
+.tagrow{display:flex;flex-direction:column;gap:7px}
+.tagrow .l{font-size:13px;color:var(--muted);font-weight:500}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.tag{padding:6px 12px;border-radius:999px;background:var(--card-2);font-size:14.5px;font-weight:500}
+.read{padding:18px 16px;display:flex;flex-direction:column;gap:14px}
+.read .hl{margin:0;font-size:20px;line-height:1.38;font-weight:650;letter-spacing:-.015em;text-wrap:balance}
+.read p{margin:0;font-size:16px;line-height:1.62;color:rgba(255,255,255,.86)}
+.read .lab{font-size:13px;font-weight:600;color:var(--faint);margin-bottom:-6px}
+.read .thr{display:flex;flex-direction:column;gap:12px;padding-top:14px;border-top:1px solid var(--line)}
+.read .thr div b{display:block;font-size:15px;font-weight:650;margin-bottom:2px}
+.read .thr div span{font-size:15px;line-height:1.55;color:rgba(255,255,255,.76)}
+.read .sym{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px solid var(--line)}
+.read .sym div{font-size:15px;line-height:1.5;color:rgba(255,255,255,.76)}
+.read .sym div b{color:#fff;font-weight:600;margin-right:6px}
+.read .folk{padding-top:14px;border-top:1px solid var(--line);font-size:14px;line-height:1.55;color:var(--muted)}
+.read .q{padding:14px 16px;border-radius:14px;background:var(--card-2);font-size:16px;line-height:1.55}
+.read .wait{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:15px}
+.read .wait i{width:8px;height:8px;border-radius:50%;background:var(--glow);animation:rdPulse 1.4s ease-in-out infinite}
+@keyframes rdPulse{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}}
+.words-edit{display:block;width:100%;min-height:180px;margin:0;padding:14px;border:0;background:transparent;color:#fff;font:16px/1.5 var(--sans);resize:vertical}
+.words-edit:focus{outline:none}
+.words-bar{display:flex;justify-content:flex-end;gap:18px;padding:0 14px 12px}
+.words-bar span{display:flex;gap:18px}
+.words{margin:0;padding:14px;font-size:16px;line-height:1.5;color:rgba(255,255,255,.85);white-space:pre-wrap}
+.danger{width:100%;padding:14px;text-align:center;color:var(--red);font-weight:600}
+.copybox{width:100%;min-height:90px;border:0;border-radius:12px;padding:12px;background:var(--card);color:#fff;font:14px/1.5 var(--sans)}
+
+/* ---------- patterns ---------- */
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:16px}
+.stat{padding:14px;border-radius:16px;background:var(--card)}
+.stat b{display:block;font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.stat span{display:block;margin-top:6px;font-size:13px;color:var(--muted)}
+.cal{padding:14px}
+.calgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px 4px;justify-items:center}
+.calgrid .wd{font-size:12px;font-weight:600;color:var(--faint)}
+.calgrid .c{width:100%;max-width:34px;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--faint);font-variant-numeric:tabular-nums}
+.calgrid button.c{color:#000}
+.calgrid .c.today{box-shadow:inset 0 0 0 1.5px #fff;color:#fff}
+.calgrid .c.future{opacity:.25}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.stack{display:flex}
+.stack img{width:30px;height:42px;border-radius:6px;object-fit:cover;border:2px solid var(--card);margin-left:-10px;background:#111}
+.stack img:first-child{margin-left:0}
+.count{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.feel{padding:14px;display:flex;flex-direction:column;gap:12px}
+.feelbar{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px}
+.foot{margin:18px 4px 0;font-size:13px;color:var(--faint)}
+.sheet-bg{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.6);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.sheet2{position:fixed;left:0;right:0;bottom:0;z-index:21;max-width:520px;margin:0 auto;background:#111113;border-radius:28px 28px 0 0;padding:28px 20px calc(22px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;max-height:92vh;overflow:auto;animation:sheetUp .38s cubic-bezier(.2,.8,.2,1)}
+@keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
+.sheet2 h2{margin:0;font-size:30px;font-weight:700;letter-spacing:-.025em;padding-right:40px}
+.sheet2 .sub{margin:0;line-height:1.45}
+.sheet2 a{color:#fff}
+.sheet2 .textlink{align-self:center;padding:6px}
+.sheet-x{position:absolute;right:16px;top:16px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.1);display:grid;place-items:center;color:var(--muted)}
+.lock{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.28);-webkit-backdrop-filter:blur(28px) saturate(1.25);backdrop-filter:blur(28px) saturate(1.25);padding:28px;text-align:center;cursor:default;z-index:3}
+.lock-in{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:300px}
+.lock-k{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.65)}
+.lock h3{margin:0;font-size:27px;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+.lock p{margin:0 0 8px;color:rgba(255,255,255,.78);font-size:15px;line-height:1.45}
+.tile .lk{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.45);display:grid;place-items:center;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+
+/* ---------- tab bar ---------- */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:8;padding:6px 16px calc(6px + env(safe-area-inset-bottom,0px));background:rgba(12,12,14,.78);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);border-top:1px solid var(--line)}
+.tabbar-in{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;font-size:10.5px;font-weight:600;color:rgba(235,235,245,.42);letter-spacing:0}
+.tab svg{width:26px;height:26px}
+.tab[aria-current="page"]{color:#fff}
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:9;width:max-content;max-width:calc(100% - 32px);padding:11px 18px;border-radius:999px;background:rgba(40,40,44,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);font-size:15px;font-weight:600;text-align:center;box-shadow:0 12px 30px -10px rgba(0,0,0,.7)}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="amb-shade" aria-hidden="true"></div>
+<div class="app">
+  <!-- RECORD -->
+  <section class="view" id="view-record" aria-label="Record">
+    <div class="rec-top">
+      <span class="logo" aria-label="Odo">odo</span>
+      <span class="top-r"><span class="chip" id="streak" hidden></span><button class="avatar" id="avatarBtn" aria-label="Profile" hidden></button></span>
+    </div>
+    <div class="rec-mid" id="recMid">
+      <div class="live" id="live" aria-live="polite"></div>
+      <div class="recwrap">
+        <canvas id="wave" width="520" height="520" aria-hidden="true"></canvas>
+        <button class="orb" id="recBtn" aria-pressed="false" aria-label="Record your dream"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></svg><span class="stop"></span></button>
+      </div>
+      <p class="rec-label" id="recLabel">Tap to record your dream</p>
+      <p class="help" id="help" hidden></p>
+      <div class="seg" id="langToggle" role="group" aria-label="Language">
+        <button data-lang="en-US" aria-pressed="true">English</button>
+        <button data-lang="zh-CN" aria-pressed="false">中文</button>
+      </div>
+    </div>
+    <div class="rec-bottom" id="recBottom">
+      <div class="composer" id="composer" hidden>
+        <label class="sr" for="dreamText">Your dream</label>
+        <textarea id="dreamText" placeholder="Start with the last thing you remember. Fragments are fine."></textarea>
+      </div>
+      <div class="rec-actions" id="recActions" hidden>
+        <button class="btn glass" id="clearBtn">Start over</button>
+        <button class="btn white" id="makeBtn">Save dream</button>
+      </div>
+      <button class="textlink" id="typeBtn" style="align-self:center">or type it</button>
+    </div>
+    <div class="making" id="making" hidden aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <h2 id="makingNow">Reading your dream</h2>
+      <p class="sub" id="makingSub">A few seconds.</p>
+    </div>
+  </section>
+
+  <!-- SIGN IN -->
+  <section class="view" id="view-auth" hidden aria-labelledby="authTitle">
+    <div class="auth">
+      <div class="auth-brand"><span class="logo big" aria-hidden="true">odo</span><p class="sub" id="authTitle">Tell it. Step inside it.</p></div>
+      <form class="auth-card" id="authForm" novalidate>
+        <div class="seg wide" role="group" aria-label="Sign in or create an account">
+          <button type="button" data-mode="in" aria-pressed="true">Sign in</button>
+          <button type="button" data-mode="up" aria-pressed="false">Create account</button>
+        </div>
+        <label class="field" id="nameField" hidden>Name<input id="authName" autocomplete="nickname" placeholder="What should odo call you?"></label>
+        <label class="field">Email<input id="authEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="off"></label>
+        <label class="field">Password<input id="authPass" type="password" autocomplete="current-password"></label>
+        <p class="auth-msg" id="authMsg" hidden></p>
+        <button class="btn white" id="authSubmit" type="submit">Sign in</button>
+        <button class="textlink" type="button" id="forgotBtn">Forgot password?</button>
+      </form>
+      <button class="textlink" id="guestBtn">Continue without an account</button>
+    </div>
+  </section>
+
+  <!-- PROFILE -->
+  <section class="view" id="view-profile" hidden aria-labelledby="profileTitle">
+    <div class="head"><h1 class="large" id="profileTitle">Profile</h1><button class="textlink" id="profileDone" style="padding-bottom:6px;color:#fff">Done</button></div>
+    <div class="card prof-top"><span class="avatar xl" id="profAvatar"></span><div style="min-width:0"><div class="prof-name" id="profNameShow"></div><div class="sub" id="profEmail" style="overflow:hidden;text-overflow:ellipsis"></div></div></div>
+    <div id="profSigned">
+      <div id="recoveryWrap" hidden>
+        <h2 class="card-h">Set a new password</h2>
+        <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px"><label class="sr" for="newPass">New password</label><input class="inline-input" id="newPass" type="password" autocomplete="new-password" placeholder="At least 6 characters" style="background:rgba(255,255,255,.08)"><button class="btn white" id="setPassBtn">Save password</button></div>
+      </div>
+      <h2 class="card-h">Name</h2>
+      <div class="card"><label class="sr" for="profName">Name</label><input class="inline-input" id="profName" maxlength="40" autocomplete="nickname"></div>
+      <h2 class="card-h">In your dreams</h2>
+      <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+        <div class="seg wide" id="profLookSeg" role="group" aria-label="You appear as"><button data-as="woman" aria-pressed="false">A woman</button><button data-as="man" aria-pressed="false">A man</button><button data-as="open" aria-pressed="false">Leave it open</button></div>
+        <label class="sr" for="profLookNote">How you look</label>
+        <input class="inline-input" id="profLookNote" maxlength="120" autocomplete="off" placeholder="Optional: long black hair, glasses…">
+      </div>
+      <p class="foot">odo paints you this way in every dreamscape.</p>
+      <h2 class="card-h">Account</h2>
+      <ul class="card rows">
+        <li><div class="row"><span></span><span class="c">Dreams saved</span><span class="count" id="profCount"></span></div></li>
+        <li><div class="row"><span></span><span class="c">Member since</span><span class="count" id="profSince"></span></div></li>
+      </ul>
+      <div class="card" style="margin-top:12px"><button class="signout" id="signOutBtn">Sign out</button></div>
+      <div class="card" style="margin-top:12px"><button class="danger" id="deleteAcctBtn">Delete account</button></div>
+      <p class="foot">Deleting your account permanently removes every dream in it.</p>
+    </div>
+    <div id="profGuest">
+      <p class="sub" style="margin:18px 4px">You're using odo without an account. Dreams stay on this phone only. Sign in to step inside them.</p>
+      <button class="btn white" id="goSignIn" style="width:100%">Sign in or create account</button>
+    </div>
+  </section>
+
+  <!-- DREAMS -->
+  <section class="view" id="view-journal" hidden aria-labelledby="dreamsTitle">
+    <div class="head"><h1 class="large" id="dreamsTitle">My dreams</h1><span class="sub" id="dreamsCount"></span></div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      <label class="sr" for="search">Search</label>
+      <input id="search" type="search" placeholder="Search" autocomplete="off">
+    </div>
+    <div class="filter" id="filter" hidden></div>
+    <button class="feature" id="feature" hidden>
+      <img alt="">
+      <span class="play" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><path d="M7 4.5v15l13-7.5z"/></svg></span>
+      <span class="over"><span class="k" id="featK"></span><span class="t" id="featT"></span></span>
+    </button>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" hidden></div>
+  </section>
+
+  <!-- FILM -->
+  <section class="view" id="view-film" hidden aria-labelledby="filmTitle">
+    <div class="bleed">
+      <div class="stage" id="stage">
+        <canvas id="film" width="720" height="1280" aria-label="Dream film. Tap to pause. Tap the left or right edge to skip scenes."></canvas>
+        <div class="segs" id="segs"></div>
+        <button class="icon back" id="back" aria-label="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <div class="rail">
+          <button id="exportBtn"><span class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></span><span id="exportLabel">Save</span></button>
+          <button id="railDelete"><span class="icon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V4.8h5V7M6.5 7l.9 12.2a1 1 0 0 0 1 .8h7.2a1 1 0 0 0 1-.8L17.5 7M10 11v5.5M14 11v5.5"/></svg></span><span id="railDeleteLabel">Delete</span></button>
+          <button id="copyBtn"><span class="icon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></span>Caption</button>
+        </div>
+        <div class="paused" id="paused" hidden><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" style="margin-left:3px"><path d="M7 4.5v15l13-7.5z"/></svg></div>
+        <div class="recpill" id="recpill" hidden></div>
+        <div class="lock" id="lock" hidden><div class="lock-in"><h3 id="lockT">Step inside</h3><p id="lockP"></p><button class="btn white" id="lockBtn">Step inside</button></div></div>
+      </div>
+    </div>
+    <div class="film-info">
+      <div class="meta" id="filmMeta"></div>
+      <h1 id="filmTitle"></h1>
+      <p class="logline" id="filmLogline"></p>
+      <p class="note" id="filmNote" hidden></p>
+      <div id="copyWrap" hidden><label class="sr" for="copybox">Caption</label><textarea class="copybox" id="copybox" readonly></textarea></div>
+    </div>
+    <div id="storyWrap" hidden><h2 class="card-h">The dream</h2><div class="card"><p class="words" id="storyText"></p></div></div>
+    <div id="readWrap" hidden><h2 class="card-h" id="readH">Reading</h2><div class="card read" id="reading" aria-live="polite"></div></div>
+    <div id="seenWrap" hidden><h2 class="card-h">Also in other dreams</h2><ul class="card rows" id="seen"></ul></div>
+    <h2 class="card-h">Scenes</h2>
+    <ol class="card rows" id="story"></ol>
+    <button class="btn glass" id="rebuildBtn" hidden style="margin-top:10px">Dream it again</button>
+    <div id="tagsWrap"><h2 class="card-h">In this dream</h2><div class="card tags" id="tags"></div></div>
+    <h2 class="card-h">What you said</h2>
+    <div class="card"><p class="words" id="words"></p>
+      <textarea class="words-edit" id="wordsEdit" hidden aria-label="What you said"></textarea>
+      <div class="words-bar"><button class="textlink" id="wordsEditBtn">Edit</button><span id="wordsActs" hidden><button class="textlink" id="wordsCancel">Cancel</button><button class="textlink" id="wordsSave" style="color:#fff;font-weight:600">Save</button></span></div>
+    </div>
+    <div class="card" style="margin-top:12px"><button class="danger" id="deleteBtn">Delete dream</button></div>
+  </section>
+
+  <!-- PATTERNS -->
+  <section class="view" id="view-patterns" hidden aria-labelledby="patternsTitle">
+    <div class="head"><h1 class="large" id="patternsTitle">Patterns</h1></div>
+    <div class="stats" id="stats"></div>
+    <h2 class="card-h">Last 5 weeks</h2>
+    <div class="card cal"><div class="calgrid" id="calgrid"></div><div class="legend" id="legend"></div></div>
+    <h2 class="card-h">Recurring</h2>
+    <ul class="card rows" id="recur"></ul>
+    <div id="feelWrap"><h2 class="card-h">Feelings</h2><div class="card feel" id="feel"></div></div>
+    <p class="foot" id="foot"></p>
+  </section>
+</div>
+
+<div class="sheet-bg" id="sheetBg" hidden></div>
+<div class="sheet2" id="consent" hidden role="dialog" aria-modal="true" aria-labelledby="csTitle">
+  <h2 id="csTitle">Before your first dreamscape</h2>
+  <p class="sub">To compose the scenes, paint them and read your dream, odo sends its words to OpenAI. Never your voice, only the text. Through the API they use it to make your dreamscape and don’t train on it.</p>
+  <p class="sub">More in our <a href="https://odo3.vercel.app/privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p>
+  <button class="btn white" id="csOk" style="width:100%;margin-top:6px">Continue</button>
+  <button class="textlink" id="csNo">Not now</button>
+</div>
+
+<div class="sheet2" id="lookSheet" hidden role="dialog" aria-modal="true" aria-labelledby="lkTitle">
+  <h2 id="lkTitle">How do you appear in your dreams?</h2>
+  <p class="sub">odo paints you into every scene. Tell it who to draw. You can change this in your profile.</p>
+  <div class="seg wide" id="lkSeg" role="group" aria-label="You appear as" style="margin:14px 0 10px"><button data-as="woman" aria-pressed="false">A woman</button><button data-as="man" aria-pressed="false">A man</button><button data-as="open" aria-pressed="false">Leave it open</button></div>
+  <label class="sr" for="lkNote">Anything else about how you look</label>
+  <input class="inline-input" id="lkNote" maxlength="120" autocomplete="off" placeholder="Optional: long black hair, glasses…" style="width:100%">
+  <button class="btn white" id="lkOk" style="width:100%;margin-top:12px" disabled>Continue</button>
+</div>
+
+<nav class="tabbar" aria-label="Main">
+  <div class="tabbar-in">
+    <button class="tab" data-tab="journal">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="10.5" rx="2"/><rect x="13" y="3" width="8" height="7" rx="2"/><rect x="3" y="15.5" width="8" height="5.5" rx="2"/><rect x="13" y="12" width="8" height="9" rx="2"/></svg>
+      My dreams
+    </button>
+    <button class="tab" data-tab="record" aria-current="page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="12" r="5.6" fill="currentColor"/></svg>
+      Record
+    </button>
+    <button class="tab" data-tab="patterns">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3.5" y="12" width="4" height="9" rx="1.6"/><rect x="10" y="7" width="4" height="14" rx="1.6"/><rect x="16.5" y="3" width="4" height="18" rx="1.6"/></svg>
+      Patterns
+    </button>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const hasClaude = !!(window.claude && typeof window.claude.use === 'function');
+const SUPA_URL = 'https://bkysyonvjyyqwifjneuh.supabase.co';
+const SUPA_KEY = 'sb_publishable_IqX3tu_MyXXuEtM6N3CgAQ_4z4eM7dr';
+let sb = null;
+const canClaude = () => hasClaude || store.mode === 'supa';
+const NAT = window.OdoNative || null;
+const LEGAL = { terms: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/', privacy: 'https://odo3.vercel.app/privacy.html' };
+const capP = name => hasClaude ? window.claude.use(name).catch(() => null) : Promise.resolve(null);
+const dbP = capP('db'), userP = capP('user'), sampleP = capP('sample'), downloadsP = capP('downloads');
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+
+/* ---------- vocabulary ---------- */
+const SETTINGS = ['ocean','city','forest','house','sky','desert','school','staircase','train','void'];
+const MOTIFS = ['moon','door','stairs','fish','eye','clock','bird','figure','window','key','tree','flower','car','fire','mirror','phone','teeth','snake','rain','stars'];
+const MOTIONS = ['drift','fall','rise','spin','rush','still'];
+const TIMES = ['night','dusk','dawn','day','void'];
+const MOODS = {
+  eerie:      { c:'#7FB2DE', pal:['#0B1426','#2E4A6B','#9CC3D5'] },
+  tender:     { c:'#F2A0BF', pal:['#2A1630','#8A4A6E','#F2C4CE'] },
+  euphoric:   { c:'#FFCF5C', pal:['#1A1440','#6B4FD8','#FFD27A'] },
+  anxious:    { c:'#FF8A65', pal:['#1C0F12','#7A2E2A','#F29B6B'] },
+  melancholy: { c:'#9C9EF0', pal:['#0F1222','#3B3F73','#A7A9D9'] },
+  absurd:     { c:'#B5DE6E', pal:['#10261E','#3E7A4B','#E6E27A'] },
+  peaceful:   { c:'#6FD6BE', pal:['#0E2026','#2F6E73','#BFE6D8'] },
+  chase:      { c:'#FF5C5C', pal:['#14080A','#8C1F2A','#FF8A5C'] }
+};
+const cap1 = s => String(s).replace(/^\w/, c => c.toUpperCase());
+
+/* ---------- dates ---------- */
+const pad = n => String(n).padStart(2, '0');
+const isoDay = d => { const z = new Date(d); return `${z.getFullYear()}-${pad(z.getMonth() + 1)}-${pad(z.getDate())}`; };
+const fromIso = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+const daysAgo = n => { const d = new Date(); d.setHours(6, 40 + n % 17, 0, 0); d.setDate(d.getDate() - n); return d; };
+const fmtShort = s => fromIso(s).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+const fmtMD = s => fromIso(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const fmtTime = s => `${Math.floor(s / 60)}:${pad(Math.floor(s % 60))}`;
+const nightsAgo = s => Math.round((fromIso(isoDay(new Date())) - fromIso(s)) / 864e5);
+const whenLabel = s => { const n = nightsAgo(s); return n === 0 ? 'Last night' : n === 1 ? 'Yesterday' : fmtShort(s); };
+const relDay = s => { const n = nightsAgo(s); return n === 0 ? 'last night' : n === 1 ? 'the night before last' : `on ${fmtMD(s)}`; };
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+/* ---------- example dreams (shown until you have three of your own; never stored) ---------- */
+function mkSample(id, n, o) { const d = daysAgo(n); return Object.assign({ id, sample: true, createdAt: d.toISOString(), dreamDate: isoDay(d), structuredBy: 'claude', fragment: false, lucid: false, nightmare: false, seed: hashStr(id) }, o); }
+const SAMPLES = [
+  mkSample('sample-lobby', 2, {
+    title: 'The Flooded Lobby', mood: 'eerie', palette: ['#0A1630','#2D5577','#A8D2DE'],
+    logline: 'A flooded apartment lobby, a mother at the front desk, and an elevator that opens onto the sea.',
+    scenes: [
+      { caption: 'I was back in my old apartment lobby, knee-deep in seawater.', setting: 'house', motifs: ['fish','door'], motion: 'drift', time: 'night' },
+      { caption: 'Fish swam between the mailboxes. Mom said I was late.', setting: 'ocean', motifs: ['fish','figure'], motion: 'drift', time: 'night' },
+      { caption: 'I checked every pocket and couldn’t find my keys.', setting: 'void', motifs: ['key'], motion: 'spin', time: 'void' },
+      { caption: 'The elevator opened onto the ocean at night, under a huge moon.', setting: 'ocean', motifs: ['moon','stars'], motion: 'still', time: 'night' }
+    ],
+    people: ['Mom'], places: ['old apartment','lobby','ocean'], symbols: ['seawater','fish','keys','doors','moon'], emotions: ['anxious','curious'],
+    transcript: 'Okay so I was back in my old apartment building, but the lobby was flooded, like seawater up to my knees, and there were fish swimming between the mailboxes. My mom was at the front desk, which makes no sense, and she kept telling me I was late for my flight. I couldn’t find my keys anywhere, I kept checking every pocket. Then the elevator doors opened and inside it was just… the ocean. At night. With this enormous moon.'
+  }),
+  mkSample('sample-train', 5, {
+    title: 'An Exam on the Night Train', mood: 'anxious', palette: ['#1A0F14','#7A3530','#F2A27A'],
+    logline: 'A classroom becomes a speeding train, the exam is blank, and the clock will not stop.',
+    scenes: [
+      { caption: 'The classroom was a train car racing through a forest.', setting: 'train', motifs: ['window'], motion: 'rush', time: 'dusk' },
+      { caption: 'A teacher I didn’t know handed me a blank exam.', setting: 'school', motifs: ['figure'], motion: 'still', time: 'dusk' },
+      { caption: 'The clock on the wall kept spinning faster.', setting: 'school', motifs: ['clock'], motion: 'spin', time: 'dusk' },
+      { caption: 'Outside, birds kept pace with the train.', setting: 'forest', motifs: ['bird'], motion: 'drift', time: 'dusk' }
+    ],
+    people: ['a teacher'], places: ['classroom','train','forest'], symbols: ['exam','clock','birds'], emotions: ['anxious','unprepared'],
+    transcript: 'It was some kind of exam, but the classroom was a train car going really fast through a forest. I hadn’t studied at all. A teacher I didn’t recognize handed me the test and there were no questions on it, just blank pages. The clock on the wall kept spinning faster and faster. Out the window there were birds flying right next to the train, keeping pace with it.'
+  }),
+  mkSample('sample-teeth', 9, {
+    title: 'Teeth Like Snow', mood: 'tender', palette: ['#16101C','#5B3A63','#E9D6E3'],
+    logline: 'At a long dinner, teeth fall like snow and no one notices; the mirror shows a child.',
+    scenes: [
+      { caption: 'At a long dinner, my teeth started falling out.', setting: 'house', motifs: ['teeth'], motion: 'fall', time: 'night' },
+      { caption: 'They landed on the tablecloth like snow. Nobody noticed.', setting: 'void', motifs: ['teeth','figure'], motion: 'fall', time: 'void' },
+      { caption: 'In the bathroom mirror, I was a kid again.', setting: 'void', motifs: ['mirror'], motion: 'still', time: 'void' }
+    ],
+    people: ['friends from college'], places: ['dinner party','bathroom'], symbols: ['teeth','mirror','snow'], emotions: ['embarrassed','panicked'],
+    transcript: 'I was at this long dinner with people from college and my teeth started falling out one by one. But it didn’t hurt, they just dropped onto the tablecloth like snow and nobody noticed or said anything. I went to the bathroom to check and in the mirror I was a kid again, like maybe eight.'
+  }),
+  mkSample('sample-city', 14, {
+    title: 'Over the Upside-Down City', mood: 'euphoric', lucid: true, palette: ['#120F3A','#5A48C8','#FFD48A'],
+    logline: 'A lucid flight over a half-familiar city, with another city hanging upside down above it.',
+    scenes: [
+      { caption: 'I realized I was dreaming, so I tried to fly.', setting: 'void', motifs: ['figure','stars'], motion: 'rise', time: 'night' },
+      { caption: 'I rose over a city that was half New York, half nowhere.', setting: 'city', motifs: ['bird','stars'], motion: 'rise', time: 'night' },
+      { caption: 'Another city hung upside down in the sky.', setting: 'sky', motifs: ['moon','stars'], motion: 'spin', time: 'night' },
+      { caption: 'Mom waved at me from a lit window.', setting: 'city', motifs: ['window'], motion: 'still', time: 'night' }
+    ],
+    people: ['Mom'], places: ['city','new york','sky'], symbols: ['flying','windows','upside-down city'], emotions: ['free','joyful'],
+    transcript: 'This one was lucid. I noticed the street signs were gibberish and I went, oh, I’m dreaming. So I tried to fly. At first I could only kind of hover, and then I just went up, over this city that was half New York and half somewhere I’ve never been. There was another city hanging upside down in the sky. I felt so free. And I saw my mom waving at me from a window.'
+  }),
+  mkSample('sample-hall', 19, {
+    title: 'The Door at the End of the Hall', mood: 'eerie', palette: ['#0E1220','#3E3A5C','#F2B27E'],
+    logline: 'Identical hotel doors, a faceless man a few steps behind, and one door that glows.',
+    scenes: [
+      { caption: 'A hotel hallway where every door was the same.', setting: 'house', motifs: ['door'], motion: 'drift', time: 'night' },
+      { caption: 'A man with no face walked a few steps behind me.', setting: 'void', motifs: ['figure'], motion: 'still', time: 'night' },
+      { caption: 'At the very end, one door glowed orange.', setting: 'house', motifs: ['door','fire'], motion: 'rush', time: 'void' },
+      { caption: 'I opened it onto the beach again. The same one as before.', setting: 'ocean', motifs: ['moon'], motion: 'still', time: 'dusk' }
+    ],
+    people: ['a faceless man'], places: ['hotel hallway','beach'], symbols: ['doors','faceless man','beach'], emotions: ['uneasy','curious'],
+    transcript: 'I was walking down a really long hotel hallway and every door was exactly the same, and I just knew one of them had something behind it I was supposed to find. There was a man with no face walking a few steps behind me the whole time, not chasing me, just there. At the very end one door was glowing orange. I opened it and it was the beach again, the same beach from before.'
+  })
+];
+
+/* ---------- state + storage ---------- */
+const state = { tab: 'record', backTo: 'journal', dreams: [], unsynced: [], justMade: null, showSamples: LS.get('odo.samples', null), query: '', filter: null, currentId: null, claudeOff: false, notes: {} };
+const store = { mode: 'pending', col: null };
+let storeReady; const storeReadyP = new Promise(r => { storeReady = r; });
+const byNewest = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt));
+function userDreams() { const seen = new Set(), out = []; [state.justMade, ...state.unsynced, ...state.dreams].forEach(d => { if (d && d.id && !seen.has(d.id)) { seen.add(d.id); out.push(d); } }); return out.sort(byNewest); }
+function samplesOn() { return false; }
+function allDreams() { const u = userDreams(); return (samplesOn() ? u.concat(SAMPLES) : u).sort(byNewest); }
+function getDream(id) { return userDreams().find(d => d.id === id) || SAMPLES.find(d => d.id === id) || null; }
+async function initStore() {
+  let db = null, user = null, uid = null;
+  try { [db, user] = await Promise.all([dbP, userP]); if (db && user) uid = await user.id(); } catch (e) {}
+  if (db && uid) {
+    try {
+      store.col = db.collection('data/users/' + uid); store.mode = 'db';
+      store.col.orderBy('createdAt', 'desc').limit(500).onSnapshot(snap => {
+        state.dreams = snap.docs.map(x => x.data()).filter(Boolean);
+        if (state.justMade && state.dreams.some(d => d.id === state.justMade.id)) state.justMade = null;
+        renderAll();
+      }, err => toast(`Sync stopped (${err && err.code || 'error'}). Reload to reconnect.`));
+    } catch (e) { store.mode = 'local'; }
+  }
+  if (store.mode !== 'db') {
+    if (!hasClaude) { await initSupabase(); storeReady(); return; }
+    store.mode = 'local'; state.dreams = LS.get('odo.dreams', []); renderAll();
+  }
+  storeReady();
+}
+async function saveDream(d) {
+  await storeReadyP;
+  const body = JSON.parse(JSON.stringify(d));
+  if (store.mode === 'supa') {
+    const { error } = await sb.from('dreams').upsert({ id: d.id, created_at: d.createdAt, dream_date: d.dreamDate, data: body });
+    if (error) { toast('Couldn\u2019t save to your account. Kept for this visit.'); state.unsynced = [body, ...state.unsynced.filter(x => x.id !== d.id)]; }
+    else state.dreams = [body, ...state.dreams.filter(x => x.id !== d.id)];
+    return;
+  }
+  if (store.mode === 'db') {
+    try { await store.col.doc(d.id).set(body); return; }
+    catch (e) { toast('Couldn’t sync. Kept for this visit.'); state.unsynced = [body, ...state.unsynced.filter(x => x.id !== d.id)]; return; }
+  }
+  const list = LS.get('odo.dreams', []).filter(x => x.id !== d.id); list.unshift(body); LS.set('odo.dreams', list); state.dreams = list;
+}
+async function removeDream(id) {
+  state.unsynced = state.unsynced.filter(d => d.id !== id);
+  if (state.justMade && state.justMade.id === id) state.justMade = null;
+  if (store.mode === 'supa') { const { error } = await sb.from('dreams').delete().eq('id', id); if (error) { toast('Couldn\u2019t delete. Try again.'); return false; } state.dreams = state.dreams.filter(x => x.id !== id); return true; }
+  if (store.mode === 'db') { try { await store.col.doc(id).delete(); } catch (e) { toast('Couldn’t delete. Try again.'); return false; } }
+  else { const list = LS.get('odo.dreams', []).filter(x => x.id !== id); LS.set('odo.dreams', list); state.dreams = list; }
+  return true;
+}
+
+/* ---------- accounts (hosted app only): Supabase auth, profile, dreams ---------- */
+function loadScript(src) { return new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = rej; document.head.appendChild(el); }); }
+async function initSupabase() {
+  try {
+    await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js');
+    sb = window.supabase.createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  } catch (e) { sb = null; }
+  if (!sb) { goLocal(); return; }
+  sb.auth.onAuthStateChange((evt, session) => {
+    // never await Supabase calls inside this callback; hand off to the next tick
+    setTimeout(() => {
+      if (evt === 'SIGNED_OUT') leaveAccount();
+      else if (evt === 'PASSWORD_RECOVERY') { state.recovery = true; if (session) enterAccount(session.user).then(() => show('profile')); }
+      else if (session && (!state.user || state.user.id !== session.user.id)) enterAccount(session.user);
+    }, 0);
+  });
+  const { data } = await sb.auth.getSession();
+  if (data && data.session) await enterAccount(data.session.user);
+  else { goLocal(); if (!LS.get('odo.guest', false)) show('auth'); }
+}
+function goLocal() { store.mode = 'local'; state.user = null; state.profile = null; state.dreams = LS.get('odo.dreams', []); updAvatar(); renderAll(); }
+async function enterAccount(user) {
+  if (state.user && state.user.id === user.id) return;
+  state.user = user; store.mode = 'supa'; state.claudeOff = false; LS.set('odo.guest', false);
+  const local = LS.get('odo.dreams', []);
+  if (local.length) {
+    const { error } = await sb.from('dreams').upsert(local.map(d => ({ id: d.id, created_at: d.createdAt, dream_date: d.dreamDate, data: d })));
+    if (!error) { LS.set('odo.dreams.backup', local); LS.set('odo.dreams', []); toast(`Moved ${local.length} dream${local.length === 1 ? '' : 's'} into your account`); }
+  }
+  const [p, d] = await Promise.all([
+    sb.from('profiles').select('*').eq('id', user.id).maybeSingle(),
+    sb.from('dreams').select('data').order('created_at', { ascending: false }).limit(500)
+  ]);
+  state.profile = p.data || { display_name: (user.email || '').split('@')[0], created_at: user.created_at };
+  if (state.profile.lang && state.profile.lang !== voice.lang) { voice.lang = state.profile.lang; LS.set('odo.lang', voice.lang); setLangUI(); }
+  if (d.error) toast('Couldn\u2019t load your dreams. Check your connection.');
+  state.dreams = (d.data || []).map(r => r.data).filter(Boolean);
+  updAvatar(); loadFrameRows(); collectFiled();
+  if (state.tab === 'auth') show('record'); else renderAll();
+}
+function leaveAccount() { state.user = null; state.profile = null; state.recovery = false; goLocal(); show('auth'); }
+function updAvatar() {
+  const b = $('#avatarBtn'); if (hasClaude) { b.hidden = true; return; }
+  b.hidden = false;
+  const n = state.profile && state.profile.display_name || '';
+  if (state.user) { b.textContent = (n.trim()[0] || (state.user.email || '?')[0]).toUpperCase(); b.setAttribute('aria-label', 'Profile'); }
+  else { b.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 21c1.4-3.8 4.3-5.8 7.5-5.8s6.1 2 7.5 5.8"/></svg>'; b.setAttribute('aria-label', 'Sign in'); }
+}
+function renderProfile() {
+  const signed = !!state.user;
+  $('#profSigned').hidden = !signed; $('#profGuest').hidden = signed; $('#recoveryWrap').hidden = !state.recovery;
+  const name = signed ? (state.profile && state.profile.display_name || '') : '';
+  $('#profAvatar').textContent = signed ? ((name.trim()[0] || (state.user.email || '?')[0]).toUpperCase()) : '?';
+  $('#profNameShow').textContent = signed ? (name || 'odo dreamer') : 'Not signed in';
+  $('#profEmail').textContent = signed ? state.user.email : 'Dreams are saved on this phone only';
+  if (signed) {
+    $('#profName').value = name;
+    const lk = lookOf() || {}; $('#profLookSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.as === lk.as)));
+    if (document.activeElement !== $('#profLookNote')) $('#profLookNote').value = lk.note || '';
+    const n = userDreams().length; $('#profCount').textContent = String(n);
+    const since = state.profile && state.profile.created_at || state.user.created_at;
+    $('#profSince').textContent = since ? new Date(since).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
+    const del = $('#deleteAcctBtn'); del.textContent = 'Delete account'; delete del.dataset.armed;
+  }
+}
+
+/* ---------- helpers ---------- */
+const hex2rgb = h => { const n = parseInt(String(h).slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgba = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const shade = (c, f) => [c[0] * f, c[1] * f, c[2] * f];
+const lum = h => { const c = hex2rgb(h); return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255; };
+const WHITE = [255, 255, 255];
+const clamp01 = v => Math.max(0, Math.min(1, v));
+const smooth = v => { v = clamp01(v); return v * v * (3 - 2 * v); };
+const mod = (v, m) => ((v % m) + m) % m;
+function rng(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function rr(ctx, x, y, w, h, r) { ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+/* ---------- WebGL dreamscape: domain-warped noise, shaped per scene ---------- */
+const FRAG = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 uRes; uniform float uTime; uniform vec3 uC0; uniform vec3 uC1; uniform vec3 uC2;
+uniform float uMode; uniform float uSeed; uniform float uEnergy; uniform vec2 uLight;
+float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+float noise(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1.,0.)),u.x), mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),u.x), u.y); }
+float fbm(vec2 p){ float v=0., a=.5; mat2 m=mat2(1.6,1.2,-1.2,1.6); for(int i=0;i<5;i++){ v+=a*noise(p); p=m*p; a*=.5; } return v; }
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec2 p = (gl_FragCoord.xy - .5*uRes)/uRes.y;
+  float t = uTime;
+  vec2 q = p*1.6 + t*.03;
+  float m = uMode;
+  if (m > .5 && m < 1.5) { q = vec2(p.x*1.1 + t*.06, p.y*3.2 + sin(p.x*3.+t*.4)*.12); }            // 1 tide: horizontal swell
+  else if (m > 1.5 && m < 2.5) { q = p*1.4 + vec2(0., -t*.22); }                                   // 2 rise
+  else if (m > 2.5 && m < 3.5) { q = p*1.4 + vec2(0., t*.26); }                                    // 3 fall
+  else if (m > 3.5 && m < 4.5) { float r=length(p*vec2(1.,.8)); float a=atan(p.y,p.x);            // 4 tunnel
+    q = vec2(a*.95, .32/(r+.04) + t*.55); }
+  else if (m > 4.5 && m < 5.5) { float r=length(p); float a=atan(p.y,p.x) + t*.25 + 2.2/(r+.45); // 5 vortex
+    q = vec2(cos(a),sin(a))*r*2.2; }
+  else if (m > 5.5) { q = vec2(p.x*5.5, p.y*.55 - t*.05); }                                        // 6 curtains
+  q += uSeed;
+  float e = 1. + uEnergy*1.6;
+  vec2 w1 = vec2(fbm(q + t*.06*e), fbm(q + vec2(5.2,1.3) - t*.05*e));
+  vec2 w2 = vec2(fbm(q + (3.+uEnergy*2.)*w1 + vec2(1.7,9.2) + t*.09*e), fbm(q + 3.*w1 + vec2(8.3,2.8)));
+  float f = fbm(q + 3.2*w2);
+  vec3 col = mix(uC0, uC1, smoothstep(.15,.85,f));
+  col = mix(col, uC2, smoothstep(.5,1.,f*length(w2)*1.35)*.9);
+  col += uC2*pow(max(0.,f-.55),2.)*1.6;
+  float d = length(p - uLight);
+  col += uC2*(.22+uEnergy*.35)*exp(-d*d*5.)*(.8+.2*sin(t*.9));
+  if (m > .5 && m < 1.5) { col += uC2*smoothstep(.035,0.,abs(p.y+.06+sin(p.x*4.+t)*.008))*.45; }
+  if (m > 3.5 && m < 4.5) { col += uC2*exp(-length(p)*7.)*.9; }
+  col *= 1. + uEnergy*.35;
+  col *= 1. - .6*dot(uv-.5,uv-.5)*2.;
+  gl_FragColor = vec4(col,1.);
+}`;
+function makeGL(w, h) {
+  try {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const gl = c.getContext('webgl', { preserveDrawingBuffer: true, antialias: false, alpha: false }) || c.getContext('experimental-webgl');
+    if (!gl) return null;
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}'));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    gl.useProgram(prog);
+    const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const U = {}; ['uRes','uTime','uC0','uC1','uC2','uMode','uSeed','uEnergy','uLight'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+    return {
+      canvas: c,
+      draw(o) {
+        gl.viewport(0, 0, w, h); gl.useProgram(prog);
+        gl.uniform2f(U.uRes, w, h); gl.uniform1f(U.uTime, o.t); gl.uniform1f(U.uMode, o.mode); gl.uniform1f(U.uSeed, o.seed); gl.uniform1f(U.uEnergy, o.energy || 0);
+        gl.uniform2f(U.uLight, o.light[0], o.light[1]);
+        const k = o.dim || 1;
+        gl.uniform3f(U.uC0, o.pal[0][0] / 255 * k, o.pal[0][1] / 255 * k, o.pal[0][2] / 255 * k);
+        gl.uniform3f(U.uC1, o.pal[1][0] / 255 * k, o.pal[1][1] / 255 * k, o.pal[1][2] / 255 * k);
+        gl.uniform3f(U.uC2, o.pal[2][0] / 255 * k, o.pal[2][1] / 255 * k, o.pal[2][2] / 255 * k);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        return c;
+      }
+    };
+  } catch (e) { return null; }
+}
+const filmGL = makeGL(360, 640);
+
+/* ---------- the dream film ---------- */
+const W = 720, H = 1280;
+const T = { intro: 2.6, scene: 4, outro: 2.6, xf: 0.9 };
+const SANS = '-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,"Helvetica Neue","PingFang SC",sans-serif';
+const ROUND = 'ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+function segs(d) { const s = []; let t = 0; s.push({ k: 'intro', s: t, d: T.intro }); t += T.intro; d.scenes.forEach((sc, i) => { s.push({ k: 'scene', i, s: t, d: T.scene }); t += T.scene; }); s.push({ k: 'outro', s: t, d: T.outro }); return s; }
+const filmLen = d => T.intro + d.scenes.length * T.scene + T.outro;
+function modeFor(sc) {
+  if (sc.motion === 'rush') return 4; if (sc.motion === 'spin') return 5; if (sc.motion === 'rise') return 2; if (sc.motion === 'fall') return 3;
+  switch (sc.setting) { case 'ocean': case 'desert': return 1; case 'sky': return 2; case 'forest': case 'city': return 6; case 'house': case 'staircase': case 'school': case 'train': return 4; default: return 0; }
+}
+function speedFor(sc) { if (sc.motion === 'rush') return sc.setting === 'train' ? 1.6 : 1.1; if (sc.setting === 'house' || sc.setting === 'staircase' || sc.setting === 'school') return .4; if (sc.motion === 'still') return .55; return 1; }
+function backdrop(ctx, pal, o) {
+  if (filmGL) { ctx.drawImage(filmGL.draw(Object.assign({ pal }, o)), 0, 0, W, H); return; }
+  const [a, b, c] = pal, g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, rgba(shade(a, .7))); g.addColorStop(.6, rgba(mix(a, b, .6))); g.addColorStop(1, rgba(b));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const lx = W / 2 + o.light[0] * H, ly = H / 2 - o.light[1] * H, gl = ctx.createRadialGradient(lx, ly, 0, lx, ly, W * .8); gl.addColorStop(0, rgba(c, .45)); gl.addColorStop(1, rgba(c, 0));
+  ctx.fillStyle = gl; ctx.fillRect(0, 0, W, H);
+}
+function bokeh(ctx, pal, r, lt) {
+  const c = mix(pal[2], WHITE, .35);
+  for (let k = 0; k < 16; k++) {
+    const x = r() * W, y0 = r() * H, R = 8 + r() * 40, sp = 5 + r() * 14, a = .04 + r() * .12, y = mod(y0 - lt * sp, H + 120) - 60, xx = x + Math.sin(lt * .4 + k) * 12;
+    const g = ctx.createRadialGradient(xx, y, 0, xx, y, R); g.addColorStop(0, rgba(c, a * 1.4)); g.addColorStop(.75, rgba(c, a)); g.addColorStop(1, rgba(c, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(xx, y, R, 0, 6.283); ctx.fill();
+  }
+}
+function dust(ctx, pal, r, lt) {
+  const c = mix(pal[2], WHITE, .5);
+  for (let k = 0; k < 44; k++) { const x = r() * W, y0 = r() * H, sp = 8 + r() * 22, s = .8 + r() * 2.2, a = .2 + .5 * (.5 + .5 * Math.sin(lt * 1.7 + k * 2.3)); ctx.fillStyle = rgba(c, a); ctx.fillRect(x + Math.sin(lt * .7 + k) * 10, mod(y0 - lt * sp, H), s, s); }
+}
+const MOTIF = {
+  moon(ctx, u, [a, b, c]) {
+    const R = u * .95, g = ctx.createRadialGradient(-R * .3, -R * .3, R * .1, 0, 0, R);
+    g.addColorStop(0, rgba(mix(c, WHITE, .65))); g.addColorStop(1, rgba(mix(c, WHITE, .1)));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R, 0, 6.283); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = rgba(b, .14); [[-.3, -.2, .18], [.25, .15, .24], [-.1, .45, .12], [.38, -.35, .1]].forEach(([x, y, q]) => { ctx.beginPath(); ctx.arc(x * R, y * R, q * R, 0, 6.283); ctx.fill(); });
+  },
+  door(ctx, u, [a, b, c], t) {
+    const w = u * .9, h = u * 1.9;
+    ctx.beginPath(); ctx.moveTo(-w / 2, h / 2); ctx.lineTo(-w / 2, -h / 2 + w / 2); ctx.arc(0, -h / 2 + w / 2, w / 2, Math.PI, 0); ctx.lineTo(w / 2, h / 2); ctx.closePath();
+    const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, rgba(mix(c, WHITE, .7))); g.addColorStop(1, rgba(mix(c, WHITE, .25)));
+    ctx.fillStyle = g; ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = rgba(c, .18); ctx.beginPath(); ctx.moveTo(-w / 2, h / 2); ctx.lineTo(w / 2, h / 2); ctx.lineTo(w * 1.8, h / 2 + u * 1.6); ctx.lineTo(-w * 1.8, h / 2 + u * 1.6); ctx.closePath(); ctx.fill();
+  },
+  stairs(ctx, u, pal, t, ink) {
+    const n = 6, sz = u * .3; ctx.fillStyle = ink; ctx.beginPath(); ctx.moveTo(-n * sz / 2, n * sz / 2);
+    for (let i = 0; i < n; i++) { const x = -n * sz / 2 + i * sz, y = n * sz / 2 - (i + 1) * sz; ctx.lineTo(x, y); ctx.lineTo(x + sz, y); }
+    ctx.lineTo(n * sz / 2, n * sz / 2); ctx.closePath(); ctx.fill();
+  },
+  fish(ctx, u, pal, t, ink) {
+    const w = Math.sin(t * 6) * .25; ctx.fillStyle = ink;
+    ctx.beginPath(); ctx.moveTo(u * .62, 0); ctx.bezierCurveTo(u * .35, -u * .34, -u * .3, -u * .3, -u * .5, 0); ctx.bezierCurveTo(-u * .3, u * .3, u * .35, u * .34, u * .62, 0); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-u * .45, 0); ctx.quadraticCurveTo(-u * .75, -u * .1, -u * .95, -u * .3 + w * u * .2); ctx.quadraticCurveTo(-u * .8, 0, -u * .95, u * .3 + w * u * .2); ctx.quadraticCurveTo(-u * .75, u * .1, -u * .45, 0); ctx.fill();
+  },
+  eye(ctx, u, [a, b, c], t) {
+    const blink = mod(t, 4.2) < .16 ? .08 : 1, w = u * .85, h = u * .42 * blink;
+    const shape = () => { ctx.beginPath(); ctx.moveTo(-w, 0); ctx.quadraticCurveTo(0, -h * 2, w, 0); ctx.quadraticCurveTo(0, h * 2, -w, 0); ctx.closePath(); };
+    ctx.save(); shape(); ctx.fillStyle = rgba(mix(c, WHITE, .6)); ctx.fill(); ctx.clip(); ctx.shadowBlur = 0;
+    const lx = Math.sin(t * .7) * u * .18;
+    ctx.fillStyle = rgba(b); ctx.beginPath(); ctx.arc(lx, 0, u * .3, 0, 6.283); ctx.fill();
+    ctx.fillStyle = rgba(shade(a, .4)); ctx.beginPath(); ctx.arc(lx, 0, u * .13, 0, 6.283); ctx.fill();
+    ctx.restore();
+  },
+  clock(ctx, u, [a, , c], t) {
+    const R = u * .8; ctx.fillStyle = rgba(mix(c, WHITE, .5), .95); ctx.beginPath(); ctx.arc(0, 0, R, 0, 6.283); ctx.fill();
+    ctx.shadowBlur = 0; ctx.strokeStyle = rgba(shade(a, .5)); ctx.lineCap = 'round';
+    for (let i = 0; i < 12; i++) { const g = i * Math.PI / 6; ctx.lineWidth = u * .035; ctx.beginPath(); ctx.moveTo(Math.cos(g) * R * .8, Math.sin(g) * R * .8); ctx.lineTo(Math.cos(g) * R * .9, Math.sin(g) * R * .9); ctx.stroke(); }
+    const hand = (ang, len, wid) => { ctx.save(); ctx.rotate(ang); ctx.lineWidth = wid; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -len); ctx.stroke(); ctx.restore(); };
+    hand(t * 2.6, R * .72, u * .045); hand(t * .3, R * .48, u * .07);
+  },
+  bird(ctx, u, pal, t, ink) {
+    const f = Math.sin(t * 7) * .55 + .3; ctx.strokeStyle = ink; ctx.lineWidth = u * .09; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-u * .6, -u * .1 * f); ctx.quadraticCurveTo(-u * .28, -u * .42 * f, 0, 0); ctx.quadraticCurveTo(u * .28, -u * .42 * f, u * .6, -u * .1 * f); ctx.stroke();
+  },
+  figure(ctx, u, [a]) {
+    ctx.fillStyle = rgba(shade(a, .25)); ctx.beginPath(); ctx.arc(0, -u * .92, u * .2, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-u * .16, -u * .72); ctx.quadraticCurveTo(-u * .42, -u * .66, -u * .4, -u * .3); ctx.lineTo(-u * .3, u * 1.1); ctx.lineTo(u * .3, u * 1.1); ctx.lineTo(u * .4, -u * .3); ctx.quadraticCurveTo(u * .42, -u * .66, u * .16, -u * .72); ctx.closePath(); ctx.fill();
+  },
+  window(ctx, u, [a, , c]) {
+    const w = u * .95, h = u * 1.25; ctx.fillStyle = rgba(mix(c, WHITE, .55)); ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.shadowBlur = 0; ctx.fillStyle = rgba(shade(a, .5), .85); ctx.fillRect(-u * .03, -h / 2, u * .06, h); ctx.fillRect(-w / 2, -u * .03, w, u * .06);
+  },
+  key(ctx, u, pal, t, ink) {
+    ctx.strokeStyle = ink; ctx.lineWidth = u * .1; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(-u * .45, 0, u * .24, 0, 6.283); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-u * .21, 0); ctx.lineTo(u * .6, 0); ctx.moveTo(u * .4, 0); ctx.lineTo(u * .4, u * .2); ctx.moveTo(u * .56, 0); ctx.lineTo(u * .56, u * .16); ctx.stroke();
+  },
+  tree(ctx, u, pal, t, ink) {
+    ctx.fillStyle = ink; ctx.fillRect(-u * .08, -u * .2, u * .16, u * 1.1);
+    [[0, -.55, .5], [-.35, -.35, .36], [.35, -.35, .36], [0, -.95, .34]].forEach(([x, y, q]) => { ctx.beginPath(); ctx.arc(x * u, y * u + Math.sin(t * .8) * u * .02, q * u, 0, 6.283); ctx.fill(); });
+  },
+  flower(ctx, u, [, b, c], t) {
+    ctx.rotate(t * .2); ctx.fillStyle = rgba(mix(c, WHITE, .4), .9);
+    for (let i = 0; i < 6; i++) { ctx.save(); ctx.rotate(i * Math.PI / 3); ctx.beginPath(); ctx.ellipse(0, -u * .32, u * .16, u * .3, 0, 0, 6.283); ctx.fill(); ctx.restore(); }
+    ctx.fillStyle = rgba(b); ctx.beginPath(); ctx.arc(0, 0, u * .16, 0, 6.283); ctx.fill();
+  },
+  car(ctx, u, [a, , c]) {
+    ctx.fillStyle = rgba(shade(a, .3)); ctx.beginPath(); rr(ctx, -u * .85, -u * .2, u * 1.7, u * .38, u * .12); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-u * .45, -u * .2); ctx.lineTo(-u * .25, -u * .48); ctx.lineTo(u * .3, -u * .48); ctx.lineTo(u * .5, -u * .2); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0; const g = ctx.createLinearGradient(u * .8, 0, u * 2.8, 0); g.addColorStop(0, rgba(mix(c, WHITE, .5), .55)); g.addColorStop(1, rgba(c, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(u * .8, -u * .05); ctx.lineTo(u * 2.8, -u * .5); ctx.lineTo(u * 2.8, u * .4); ctx.closePath(); ctx.fill();
+  },
+  fire(ctx, u, [, , c], t) {
+    const orange = [255, 138, 61];
+    for (let i = 0; i < 3; i++) {
+      const fl = 1 + Math.sin(t * 9 + i * 2) * .08, x = (i - 1) * u * .3, h = u * (i === 1 ? 1.1 : .75) * fl, w = u * (i === 1 ? .4 : .3);
+      const g = ctx.createLinearGradient(0, -h, 0, u * .15); g.addColorStop(0, rgba(mix(orange, c, .3), 0)); g.addColorStop(.35, rgba(mix(orange, c, .2), .85)); g.addColorStop(1, rgba(mix([255, 230, 160], c, .2), .95));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x, -h); ctx.bezierCurveTo(x + w, -h * .4, x + w * .9, 0, x, u * .15); ctx.bezierCurveTo(x - w * .9, 0, x - w, -h * .4, x, -h); ctx.fill();
+    }
+  },
+  mirror(ctx, u, [a, b, c], t) {
+    ctx.save(); ctx.beginPath(); ctx.ellipse(0, 0, u * .55, u * .85, 0, 0, 6.283);
+    const g = ctx.createLinearGradient(-u * .5, -u * .8, u * .5, u * .8); g.addColorStop(0, rgba(mix(c, WHITE, .65))); g.addColorStop(.5, rgba(mix(b, c, .5))); g.addColorStop(1, rgba(mix(c, WHITE, .3)));
+    ctx.fillStyle = g; ctx.fill(); ctx.clip(); ctx.shadowBlur = 0;
+    ctx.fillStyle = rgba(shade(a, .5), .6); ctx.beginPath(); ctx.arc(0, -u * .12, u * .12, 0, 6.283); ctx.fill(); ctx.fillRect(-u * .16, 0, u * .32, u * .6);
+    ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.beginPath(); ctx.moveTo(-u * .6, -u * .2 + Math.sin(t * .5) * u * .1); ctx.lineTo(-u * .1, -u * .9); ctx.lineTo(u * .05, -u * .9); ctx.lineTo(-u * .45, 0); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  },
+  phone(ctx, u, [a, , c], t) {
+    ctx.fillStyle = rgba(shade(a, .3)); ctx.beginPath(); rr(ctx, -u * .3, -u * .55, u * .6, u * 1.1, u * .1); ctx.fill();
+    ctx.fillStyle = rgba(mix(c, WHITE, .5), .8 + .2 * Math.sin(t * 3)); ctx.beginPath(); rr(ctx, -u * .25, -u * .47, u * .5, u * .92, u * .06); ctx.fill();
+  },
+  teeth(ctx, u, [, , c]) {
+    ctx.fillStyle = rgba(mix([248, 244, 236], c, .12)); ctx.beginPath();
+    ctx.moveTo(-u * .24, -u * .1); ctx.quadraticCurveTo(-u * .26, -u * .34, -u * .08, -u * .32); ctx.quadraticCurveTo(0, -u * .26, u * .08, -u * .32); ctx.quadraticCurveTo(u * .26, -u * .34, u * .24, -u * .1);
+    ctx.lineTo(u * .18, u * .28); ctx.quadraticCurveTo(u * .12, u * .34, u * .06, u * .12); ctx.lineTo(-u * .06, u * .12); ctx.quadraticCurveTo(-u * .12, u * .34, -u * .18, u * .28); ctx.closePath(); ctx.fill();
+  },
+  snake(ctx, u, pal, t, ink) {
+    ctx.strokeStyle = ink; ctx.lineWidth = u * .16; ctx.lineCap = 'round'; ctx.beginPath();
+    for (let i = 0; i <= 30; i++) { const f = i / 30, x = -u * 1.2 + f * u * 2.4, y = Math.sin(f * 9 - t * 3) * u * .22 * (.4 + f * .6); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+  }
+};
+const HERO = { moon: 1.5, door: 1.45, figure: 1.3, window: 1.15, eye: 1.4, clock: 1.3, mirror: 1.35, tree: 1.6, car: 1.25, phone: 1.25, stairs: 1.4, snake: 1.3, fish: 1.2, bird: 1.2, teeth: 1.1, flower: 1.3, key: 1.3, fire: 1.4 };
+const FLOCK = { bird: 7, fish: 6, teeth: 9, flower: 6 };
+const DARK = { figure: 1, tree: 1, car: 1, phone: 1 };
+function motionFor(motion, t, ph, hero, m, x, y) {
+  const o = { dx: 0, dy: 0, rot: 0, s: 1, ax: null, ay: null, flip: false };
+  if (!hero && m === 'teeth' && (motion === 'drift' || motion === 'still')) motion = 'fall';
+  switch (motion) {
+    case 'fall': if (hero) { o.dy = t * 22; o.rot = Math.sin(t * .7) * .12; } else { o.ay = mod(y + t * (140 + ph * 20), H + 240) - 120; o.rot = t * .8 + ph; } break;
+    case 'rise': if (hero) o.dy = -t * 24; else o.ay = mod(y - t * (110 + ph * 15), H + 240) - 120; break;
+    case 'spin': o.rot = t * (hero ? .3 : .9) + ph; break;
+    case 'rush': if (hero) o.s = 1 + t * .1; else { const k = 1 + mod(t * .35 + ph / 6.28, 1) * 1.8; o.ax = W / 2 + (x - W / 2) * k; o.ay = H * .45 + (y - H * .45) * k; o.s = k * .7; } break;
+    case 'still': o.s = 1 + Math.sin(t * 1.3 + ph) * .025; break;
+    default: o.dx = Math.sin(t * .45 + ph) * (hero ? 16 : 36); o.dy = Math.cos(t * .35 + ph) * (hero ? 12 : 26); o.rot = Math.sin(t * .3 + ph) * .05;
+  }
+  if (!hero && (m === 'bird' || m === 'fish') && motion !== 'fall' && motion !== 'rise' && motion !== 'rush') {
+    const dir = ph > 3.14 ? 1 : -1; o.ax = mod(x + t * (m === 'bird' ? 90 : 55) * dir, W + 240) - 120; o.ay = y + Math.sin(t * 1.4 + ph) * 12; o.rot = 0; o.flip = dir < 0;
+  }
+  return o;
+}
+function drawMotif(ctx, m, x, y, s, o, pal, t, hero, alpha) {
+  const [a, , c] = pal, u = 100 * s;
+  const ink = DARK[m] ? rgba(shade(a, .3), .95) : rgba(mix(c, WHITE, .55), .92);
+  ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot || 0); if (o.flip) ctx.scale(-1, 1);
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = rgba(mix(c, WHITE, .3), hero ? .9 : .6); ctx.shadowBlur = hero ? 60 : 18;
+  (MOTIF[m] || MOTIF.moon)(ctx, u, pal, t, ink);
+  ctx.restore();
+}
+function drawField(ctx, m, pal, r, lt) {
+  const c = mix(pal[2], WHITE, .5);
+  if (m === 'rain') {
+    ctx.strokeStyle = rgba(c, .3); ctx.lineWidth = 2; ctx.beginPath();
+    for (let k = 0; k < 120; k++) { const x = r() * W, y0 = r() * H, sp = 900 + r() * 500, len = 24 + r() * 34, y = mod(y0 + lt * sp, H + 80) - 40; ctx.moveTo(x, y); ctx.lineTo(x - len * .15, y + len); }
+    ctx.stroke();
+  } else {
+    for (let k = 0; k < 120; k++) { const x = r() * W, y = r() * H * .8, s = .8 + r() * 2.6, sp = 1 + r() * 3, tw = .5 + .5 * Math.sin(lt * sp + k); ctx.fillStyle = rgba(c, .15 + .75 * tw); ctx.beginPath(); ctx.arc(x, y, s, 0, 6.283); ctx.fill(); }
+  }
+}
+function flock(ctx, m, n, sc, pal, r, lt) {
+  for (let k = 0; k < n; k++) {
+    const x = r() * W, y = H * (.08 + r() * .62), s = .3 + r() * .4, ph = r() * 6.28, o = motionFor(sc.motion, lt, ph, false, m, x, y);
+    drawMotif(ctx, m, o.ax != null ? o.ax : x + o.dx, o.ay != null ? o.ay : y + o.dy, s * o.s, o, pal, lt + ph, false, .55 + s * .5);
+  }
+}
+function wrapTokens(ctx, text, maxW) {
+  const cjk = /[぀-ヿ㐀-鿿가-힯]/.test(text);
+  const toks = cjk ? Array.from(text) : String(text).split(/\s+/).filter(Boolean), sep = cjk ? '' : ' ';
+  const lines = []; let cur = [];
+  for (const tk of toks) { const test = cur.concat(tk).join(sep); if (ctx.measureText(test).width > maxW && cur.length) { lines.push(cur); cur = [tk]; } else cur.push(tk); }
+  if (cur.length) lines.push(cur);
+  return { lines, sep, cjk };
+}
+/* captions: calm lower-third text, lines fading up one after another */
+function caption(ctx, text, lt, pal) {
+  if (!text || lt <= 0) return;
+  const vis = clamp01((T.scene - lt) / .5); if (vis <= 0) return;
+  let size = 44; ctx.font = `600 ${size}px ${SANS}`;
+  let wrap = wrapTokens(ctx, text, W * .8);
+  while (wrap.lines.length > 3 && size > 32) { size -= 4; ctx.font = `600 ${size}px ${SANS}`; wrap = wrapTokens(ctx, text, W * .8); }
+  const { lines, sep } = wrap, lh = size * 1.3, y0 = H * .76 - (lines.length - 1) * lh / 2;
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
+  lines.forEach((ln, li) => {
+    const p = smooth(clamp01((lt - .25 - li * .35) / .8)); if (p <= 0) return;
+    ctx.save(); ctx.globalAlpha = p * vis;
+    ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 2;
+    ctx.fillStyle = 'rgba(255,255,255,.96)'; ctx.fillText(ln.join(sep), W / 2, y0 + li * lh + (1 - p) * 14);
+    ctx.restore();
+  });
+  ctx.textAlign = 'left';
+}
+function drawPainted(ctx, img, sc, i, lt) {
+  // Wide landscape stills inside a tall frame: the camera glides across the picture like a film pan.
+  const iw = img.naturalWidth, ih = img.naturalHeight, e = smooth(clamp01((lt + T.xf) / (T.scene + T.xf)));
+  let z = 1.02 + .05 * e, dy = 0, pan = 1 - 2 * e;
+  switch (sc && sc.motion) {
+    case 'rise': dy = 30 - 60 * e; break;
+    case 'fall': dy = -30 + 60 * e; break;
+    case 'rush': z = 1.02 + .2 * e; pan *= .4; break;
+    case 'still': z = 1.03 + .02 * e; pan *= .35; break;
+    case 'spin': pan = Math.sin(lt * .6) * .6; break;
+  }
+  const sc0 = Math.max(W / iw, H / ih) * z, over = Math.max(0, iw * sc0 - W) / 2, dir = i % 2 ? -1 : 1;
+  const dx = dir * pan * over * .55;
+  ctx.save(); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  ctx.translate(W / 2 + dx, H / 2 + dy); ctx.scale(sc0, sc0); ctx.drawImage(img, -iw / 2, -ih / 2); ctx.restore();
+  const g = ctx.createLinearGradient(0, H * .5, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.62)');
+  ctx.fillStyle = g; ctx.fillRect(0, H * .5, W, H * .5);
+}
+function drawScene(ctx, d, pal, sc, i, lt, opt) {
+  const img = frameFor(d, i);
+  if (img) { drawPainted(ctx, img, sc, i, lt); if (opt.caption !== false) caption(ctx, sc.caption, lt, pal); return; }
+  const r = rng((d.seed || 1) + i * 7919);
+  const hx = W * .5 + (r() - .5) * 140, hy = H * .38 + (r() - .5) * 80;
+  const p = clamp01((lt + T.xf) / (T.scene + T.xf)), z = 1 + .07 * p;
+  backdrop(ctx, pal, { t: 20 + i * 13 + lt * speedFor(sc), mode: modeFor(sc), seed: ((d.seed || 1) % 997) / 37 + i * 4.3, light: [(hx - W / 2) / H, -(hy - H / 2) / H] });
+  ctx.save(); ctx.translate(W / 2, H * .45); ctx.scale(z, z); ctx.translate(-W / 2, -H * .45);
+  bokeh(ctx, pal, r, lt);
+  // No literal icons: a soft source of light that moves with the scene, plus weather.
+  { const o = motionFor(sc.motion, lt, 0, true, 'moon', hx, hy), R = 260 * o.s, c = mix(pal[2], WHITE, .35);
+    const g = ctx.createRadialGradient(hx + o.dx, hy + o.dy, 0, hx + o.dx, hy + o.dy, R);
+    g.addColorStop(0, rgba(c, .55)); g.addColorStop(.35, rgba(pal[2], .22)); g.addColorStop(1, rgba(pal[2], 0));
+    ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+  if (sc.motifs.includes('rain')) drawField(ctx, 'rain', pal, r, lt);
+  else drawField(ctx, 'stars', pal, r, lt);
+  dust(ctx, pal, r, lt);
+  ctx.restore();
+  if (opt.caption !== false) caption(ctx, sc.caption, lt, pal);
+}
+function drawIntro(ctx, d, pal, lt) {
+  const img0 = frameFor(d, 0);
+  if (img0) { drawPainted(ctx, img0, { motion: 'still' }, 0, lt * .4); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(0, 0, W, H); }
+  else { backdrop(ctx, pal, { t: 5 + lt * .8, mode: 5, seed: ((d.seed || 1) % 997) / 37, light: [0, .05], dim: .7 }); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, 0, W, H); }
+  const a1 = smooth(lt / 1.1); ctx.textAlign = 'center';
+  ctx.font = `800 76px ${SANS}`;
+  const { lines, sep } = wrapTokens(ctx, d.title, W * .8), lh = 84, y0 = H * .48 - (lines.length - 1) * lh / 2 + (1 - a1) * 24;
+  ctx.font = `600 26px ${SANS}`; ctx.fillStyle = `rgba(255,255,255,${.7 * a1})`;
+  ctx.fillText(fromIso(d.dreamDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }), W / 2, y0 - 96);
+  ctx.font = `800 76px ${SANS}`;
+  ctx.fillStyle = `rgba(255,255,255,${a1})`; lines.forEach((ln, i) => ctx.fillText(ln.join(sep), W / 2, y0 + i * lh));
+  ctx.textAlign = 'left';
+}
+function drawOutro(ctx, d, pal, lt) {
+  const imgL = frameFor(d, (d.scenes || []).length - 1);
+  if (imgL) { drawPainted(ctx, imgL, { motion: 'still' }, 1, T.scene + lt * .3); ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H); }
+  else { backdrop(ctx, pal, { t: 40 + lt * .6, mode: 0, seed: ((d.seed || 1) % 997) / 37 + 9, light: [0, .02], dim: .5 }); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H); }
+  const a1 = smooth(lt / .8); ctx.textAlign = 'center';
+  ctx.fillStyle = `rgba(255,255,255,${a1})`; ctx.font = `800 150px ${ROUND}`; ctx.fillText('odo', W / 2, H * .52);
+  ctx.font = `600 28px ${SANS}`; ctx.fillStyle = `rgba(255,255,255,${.7 * a1})`; ctx.fillText('Tell it. Step inside it.', W / 2, H * .58);
+  ctx.textAlign = 'left';
+}
+function drawSeg(ctx, d, pal, g, lt, opt) {
+  ctx.save();
+  if (g.k === 'intro') drawIntro(ctx, d, pal, lt); else if (g.k === 'outro') drawOutro(ctx, d, pal, lt); else drawScene(ctx, d, pal, d.scenes[g.i], g.i, lt, opt);
+  ctx.restore();
+}
+const bloomC = document.createElement('canvas'); bloomC.width = 90; bloomC.height = 160; const blx = bloomC.getContext('2d');
+const grainTile = document.createElement('canvas'); grainTile.width = grainTile.height = 160;
+(() => { const g = grainTile.getContext('2d'), id = g.createImageData(160, 160); for (let i = 0; i < id.data.length; i += 4) { const v = Math.random() > .5 ? 255 : 0; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = Math.random() * 18; } g.putImageData(id, 0, 0); })();
+const patterns = new WeakMap();
+function bloom(ctx) {
+  const cv = ctx.canvas;
+  blx.globalCompositeOperation = 'source-over'; blx.drawImage(cv, 0, 0, 90, 160);
+  blx.globalCompositeOperation = 'multiply'; blx.drawImage(bloomC, 0, 0);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = .55; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bloomC, 0, 0, cv.width, cv.height); ctx.restore();
+}
+function finish(ctx, t) {
+  let pat = patterns.get(ctx); if (!pat) { pat = ctx.createPattern(grainTile, 'repeat'); patterns.set(ctx, pat); }
+  const ox = (t * 997 % 160) | 0, oy = (t * 613 % 160) | 0;
+  ctx.save(); ctx.translate(-ox, -oy); ctx.fillStyle = pat; ctx.fillRect(0, 0, W + 160, H + 160); ctx.restore();
+}
+const buf = document.createElement('canvas'); buf.width = W; buf.height = H; const bctx = buf.getContext('2d');
+function drawFrame(ctx, d, t, opt = {}) {
+  const pal = (d.palette || MOODS.eerie.pal).map(hex2rgb), S = segs(d);
+  t = Math.max(0, Math.min(t, filmLen(d) - .001));
+  let k = S.findIndex(g => t >= g.s && t < g.s + g.d); if (k < 0) k = S.length - 1;
+  const g = S[k], lt = t - g.s;
+  drawSeg(ctx, d, pal, g, lt, opt);
+  const nx = S[k + 1];
+  if (nx && !opt.still && lt > g.d - T.xf) {
+    bctx.setTransform(1, 0, 0, 1, 0, 0); drawSeg(bctx, d, pal, nx, t - nx.s, opt);
+    ctx.save(); ctx.globalAlpha = smooth((lt - (g.d - T.xf)) / T.xf); ctx.drawImage(buf, 0, 0, W, H); ctx.restore();
+  }
+  if (!(g.k === 'scene' && frameFor(d, g.i)) && !(g.k !== 'scene' && anyFrames(d))) bloom(ctx);
+  if (opt.watermark !== false && g.k === 'scene') { ctx.save(); ctx.font = `800 40px ${ROUND}`; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillText('odo', 36, H - 48); ctx.restore(); }
+  finish(ctx, t);
+}
+const thumbCache = new Map(), tcan = document.createElement('canvas'), tctx = tcan.getContext('2d');
+function thumb(d, w = 240) {
+  const painted = !!frameFor(d, 0), saveKey = 'odo.th.' + d.id + '.' + w;
+  // Until the pictures have downloaded, show the last painted cover saved on this phone instead of the plain look.
+  if (!painted && !d.sample) { const saved = LS.get(saveKey, ''); if (saved) return saved; }
+  const key = [d.id, w, d.title, (d.palette || []).join(','), JSON.stringify(d.scenes && d.scenes[0] || ''), painted ? 'p' : 'n'].join('|');
+  if (thumbCache.has(key)) return thumbCache.get(key);
+  const h = Math.round(w * 16 / 9); tcan.width = w; tcan.height = h; tctx.setTransform(w / W, 0, 0, w / W, 0, 0);
+  drawFrame(tctx, d, T.intro + T.scene * .6, { still: true, caption: false, watermark: false });
+  let url = ''; try { url = tcan.toDataURL('image/jpeg', .86); } catch (e) {}
+  if (painted && url) { let small = url; try { small = tcan.toDataURL('image/jpeg', .62); } catch (e) {} LS.set(saveKey, small); }
+  thumbCache.set(key, url); return url;
+}
+
+/* ---------- structuring: Claude first, a quick local parser as fallback ---------- */
+const pick = (v, list, dflt) => { v = String(v || '').toLowerCase().trim(); return list.includes(v) ? v : dflt; };
+const strs = (a, max, lower) => { const out = []; (Array.isArray(a) ? a : []).forEach(x => { let s = String(x == null ? '' : x).trim(); if (lower) s = s.toLowerCase(); if (s && !out.includes(s)) out.push(s); }); return out.slice(0, max); };
+const clip = (s, n) => s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
+function normalize(raw, flags) {
+  if (!raw || typeof raw !== 'object') throw new Error('shape');
+  const mood = pick(raw.mood, Object.keys(MOODS), 'eerie');
+  let pal = Array.isArray(raw.palette) ? raw.palette.filter(h => /^#[0-9a-f]{6}$/i.test(String(h))).slice(0, 3) : [];
+  if (pal.length < 3) pal = MOODS[mood].pal.slice();
+  pal.sort((x, y) => lum(x) - lum(y));
+  if (lum(pal[2]) - lum(pal[0]) < .3) pal = MOODS[mood].pal.slice();
+  const scenes = (Array.isArray(raw.scenes) ? raw.scenes : []).slice(0, 10).map(s => ({
+    caption: clip(String(s && s.caption || '').trim(), 120), shot: clip(String(s && s.shot || '').trim(), 700), setting: pick(s && s.setting, SETTINGS, 'void'),
+    motifs: strs(s && s.motifs, 3, true).filter(m => MOTIFS.includes(m)), motion: pick(s && s.motion, MOTIONS, 'drift'), time: pick(s && s.time, TIMES, 'night')
+  })).filter(s => s.caption);
+  if (!scenes.length) throw new Error('no scenes');
+  scenes.forEach(s => { if (!s.motifs.length) s.motifs = ['stars']; });
+  return {
+    title: clip(String(raw.title || '').replace(/["“”]/g, '').trim(), 60) || 'Untitled dream',
+    logline: clip(String(raw.logline || '').trim(), 180), mood, palette: pal, scenes, cast: clip(String(raw.cast || '').trim(), 300), story: clip(String(raw.story || '').trim(), 2500),
+    people: strs(raw.people, 6), places: strs(raw.places, 6, true), symbols: strs(raw.symbols, 8, true), emotions: strs(raw.emotions, 4, true),
+    lucid: !!raw.lucid || !!flags.lucid, nightmare: !!raw.nightmare || !!flags.nightmare
+  };
+}
+function buildPrompt(text, flags) {
+  const L = lookLine(), who = lookWho(lookOf());
+  return `You are the story editor inside Odo, a dream journal app. Someone just woke up and spoke their dream out loud; below is the raw transcript (speech-to-text, so expect filler words and run-ons). Turn it into a storyboard for a short, surreal vertical film (about 15 seconds).
+
+Rules:
+- Use only what the dreamer said. Do not add events, people or places they did not mention. You may choose visual settings and motifs that fit what they described.
+- Write everything in English: title, logline, captions, people, places, symbols and emotions. If the transcript is in another language, translate it naturally. Keep personal names as the dreamer wrote them; translate family words (妈妈 → Mom, 舅舅 → my uncle).
+- scenes: one scene for every distinct moment the dreamer describes, in the order things happened, up to 10 scenes. If there are more than 10 moments, fold the minor ones into their neighbors. Don't invent extra ones. A short fragment may be a single scene.
+- The transcript is stream of consciousness: half-sentences, repeats, "and then", corrections, misheard words. Don't quote it. Work out what actually happened and retell it in clean, well-written prose.
+- story: the whole dream retold in first person, past tense, as a clear, vivid short piece of 80 to 220 words. Keep every real event, person and feeling, drop the filler and repetition, and keep vague parts vague rather than filling them in.
+- caption: first person, past tense, at most 12 words, a newly written line (not the dreamer's literal phrasing) that says what happens in this scene.
+- setting: exactly one of ${SETTINGS.join(', ')}. (house covers any interior: rooms, hallways, hotels, lobbies.)
+- motifs: 1 to 3 of ${MOTIFS.join(', ')}, most important first. Pick the closest match when nothing is literal (an elevator can be a door; a crowd can be figure).
+- motion: one of ${MOTIONS.join(', ')} (drift = floating, fall = things falling, rise = flying or lifting, spin = disorientation, rush = speed or being chased, still = quiet). Vary motion across scenes when the dream allows.
+- time: one of ${TIMES.join(', ')}.
+- title: 2 to 6 words, evocative, no quotation marks.
+- logline: one sentence, at most 20 words.
+- mood: one of ${Object.keys(MOODS).join(', ')}.
+- palette: three hex colors for this dream: a deep shadow, a saturated mid tone, and a bright glow. Make them vivid and specific to the dream.
+- people: as the dreamer refers to them ("Mom", "a stranger"), at most 6. places: short lowercase phrases, at most 6. symbols: notable objects or images, lowercase, at most 8. emotions: single lowercase words, at most 4.
+- cast: one sentence describing how the dreamer and anyone who appears in more than one scene look (hair, build, clothing colors). Keep it simple and specific; if the dreamer never described themselves, make them a slender figure seen mostly from behind or in profile.
+- shot: for each scene, 40 to 80 words for an illustrator painting a wide landscape film still: the characters, what they are doing, the location and the emotional moment, with small figures inside a richly designed environment, the camera angle and where the light falls. Keep the most important figure near the center of the frame. Concrete and visual. Never explicit: show intimacy or danger only through distance, posture and light. No writing or signs in the picture.
+${L ? `- About the dreamer: ${L} Use this in cast, and in every shot where the dreamer appears, describe them as ${who || 'described here'} rather than only writing "I".\n` : ''}- lucid: true only if they say they knew they were dreaming. nightmare: true only if it was frightening.
+${flags.fragment ? '- This is only a fragment.\n' : ''}
+Reply with only JSON in this shape:
+{"title":"","logline":"","mood":"","palette":["#000000","#000000","#000000"],"story":"","cast":"","scenes":[{"caption":"","shot":"","setting":"","motifs":[""],"motion":"","time":""}],"people":[],"places":[],"symbols":[],"emotions":[],"lucid":false,"nightmare":false}
+
+Transcript:
+"""
+${text.slice(0, 6000)}
+"""`;
+}
+const KW = {
+  settings: { ocean: ['ocean','sea','beach','wave','waves','swim','swimming','lake','river','flood','flooded','海','水'], city: ['city','street','streets','building','buildings','downtown','new york','manhattan','skyscraper','城市','街'], forest: ['forest','woods','trees','jungle','park','森林'], house: ['house','home','room','hallway','hall','kitchen','apartment','hotel','bedroom','bathroom','lobby','家','房间'], sky: ['fly','flying','flew','sky','cloud','clouds','float','floating','飞','天空'], desert: ['desert','sand','dune','dunes'], school: ['school','class','classroom','exam','test','teacher','office','meeting','学校','考试'], staircase: ['stairs','staircase','steps','elevator','escalator','楼梯','电梯'], train: ['train','subway','station','airport','plane','flight','bus','火车','地铁'] },
+  motifs: { moon: ['moon','月亮'], door: ['door','doors','gate','门'], stairs: ['stairs','staircase'], fish: ['fish','whale','shark','鱼'], eye: ['eye','eyes','watching','watched','眼睛'], clock: ['clock','late','watch','时间'], bird: ['bird','birds','crow','crows','鸟'], figure: ['man','woman','stranger','person','someone','shadow','faceless','people','人'], window: ['window','windows','窗'], key: ['key','keys','钥匙'], tree: ['tree','trees','树'], flower: ['flower','flowers','garden','花'], car: ['car','driving','drive','车'], fire: ['fire','burning','flames','火'], mirror: ['mirror','reflection','镜子'], phone: ['phone','call','calling','text','手机'], teeth: ['teeth','tooth','牙'], snake: ['snake','snakes','蛇'], rain: ['rain','raining','storm','雨'], stars: ['stars','star','space','星'] },
+  emotions: { scared: ['scared','afraid','terrified','fear','害怕'], anxious: ['anxious','nervous','late','panic','panicked','stressed','焦虑'], happy: ['happy','joy','joyful','glad','开心'], free: ['free','freedom'], calm: ['calm','peaceful','quiet'], sad: ['sad','cried','crying','grief','难过'], lost: ['lost','confused'], embarrassed: ['embarrassed','naked','ashamed'], curious: ['curious','strange','weird'], loved: ['love','loved','hug','hugged','kissed'] }
+};
+const KIN = ['mom','dad','mother','father','sister','brother','grandma','grandpa','grandmother','grandfather','aunt','uncle','boss','teacher','ex','boyfriend','girlfriend','husband','wife','partner','baby','stranger','妈妈','爸爸'];
+const STOP = new Set(['I','The','Then','And','But','So','It','We','He','She','They','There','This','That','My','Some','Like','Just','When','Okay','Ok','Oh','Um','A','An','In','On','At','Out','Up','All']);
+function has(text, w) { return /[㐀-鿿]/.test(w) ? text.includes(w) : new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(text); }
+function localStructure(text, flags) {
+  const lower = text.toLowerCase();
+  let sents = text.split(/(?<=[.!?。！？])\s*|\n+/).map(s => s.trim()).filter(s => s.length > 2);
+  if (sents.length < 2) sents = text.split(/,\s*(?:and then|then|and)\s+|，/).map(s => s.trim()).filter(s => s.length > 2);
+  if (!sents.length) sents = [text.trim()];
+  const nScenes = Math.max(1, Math.min(sents.length, flags.fragment ? 3 : 5));
+  const groups = Array.from({ length: nScenes }, (_, i) => sents.slice(Math.floor(i * sents.length / nScenes), Math.floor((i + 1) * sents.length / nScenes)).join(' '));
+  const found = (dict, s) => Object.keys(dict).filter(k => dict[k].some(w => has(s, w)));
+  const words = (dict, s) => { const out = []; Object.values(dict).forEach(list => list.forEach(w => { if (has(s, w) && !out.includes(w)) out.push(w); })); return out; };
+  const globalSet = found(KW.settings, lower)[0] || 'void';
+  const scenes = groups.map(gtext => {
+    const toks = gtext.split(/\s+/), capt = /[㐀-鿿]/.test(gtext) ? gtext.slice(0, 22) : toks.slice(0, 11).join(' ').replace(/[,;:]$/, '');
+    const motifs = found(KW.motifs, gtext.toLowerCase()).slice(0, 3), l = gtext.toLowerCase();
+    const motion = /\b(fall|fell|falling|dropp?ed|dropping)\b/.test(l) ? 'fall' : /\b(fly|flew|flying|float\w*|rose|rising)\b/.test(l) ? 'rise' : /\b(run|ran|running|chase\w*|fast|hurr\w*)\b/.test(l) ? 'rush' : /\b(spin\w*|dizzy|spun)\b/.test(l) ? 'spin' : 'drift';
+    const time = /\b(sunset|evening|dusk)\b/.test(l) ? 'dusk' : /\b(dawn|sunrise)\b/.test(l) ? 'dawn' : /\b(sun|sunny|morning|daylight|bright)\b/.test(l) ? 'day' : 'night';
+    return { caption: capt + (toks.length > 11 ? '…' : ''), setting: found(KW.settings, l)[0] || globalSet, motifs: motifs.length ? motifs : ['stars'], motion, time };
+  });
+  const emotions = found(KW.emotions, lower).slice(0, 4);
+  const moodMap = { scared: 'chase', anxious: 'anxious', happy: 'euphoric', free: 'euphoric', calm: 'peaceful', sad: 'melancholy', loved: 'tender', lost: 'melancholy', embarrassed: 'anxious', curious: 'eerie' };
+  const mood = moodMap[emotions[0]] || (flags.nightmare ? 'chase' : 'eerie');
+  const people = [];
+  KIN.forEach(k => { if (has(lower, k)) people.push(/^[a-z]/.test(k) ? cap1(k) : k); });
+  sents.forEach(s => { s.split(/\s+/).slice(1).forEach(w => { const m = w.replace(/[^A-Za-z'-]/g, ''); if (/^[A-Z][a-z]{2,}$/.test(m) && !STOP.has(m) && !people.includes(m) && people.length < 6) people.push(m); }); });
+  const symbols = words(KW.motifs, lower).filter(w => !['late','someone','person','people','man','woman','text','call','calling','drive','driving','watching','watched','space'].includes(w)).slice(0, 8);
+  const places = words(KW.settings, lower).filter(w => !['swim','swimming','fly','flying','flew','float','floating','test','exam','flight','flood','flooded','wave','waves','water','水','飞'].includes(w)).slice(0, 6);
+  const hero = symbols[0] || places[0] || 'dream';
+  const title = /[㐀-鿿]/.test(text) ? clip(sents[0], 12) : 'The ' + cap1(hero) + (places[0] && places[0] !== hero ? ' and the ' + cap1(places[0]) : '');
+  return { title, logline: clip(sents[0], 140), mood, palette: MOODS[mood].pal.slice(), scenes, people: people.slice(0, 6), places, symbols, emotions, lucid: !!flags.lucid || /i knew i was dreaming|lucid|realized i was dreaming/.test(lower), nightmare: !!flags.nightmare || emotions.includes('scared') };
+}
+const SAMPLE_OFF = new Set(['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed']);
+function sampleMessage(code) {
+  if (SAMPLE_OFF.has(code)) return 'Claude isn’t switched on for this page, so these scenes came from a simpler parser.';
+  if (code === 'rate_limited') return 'Claude was busy, so these scenes came from a simpler parser. Try rewriting them in a minute.';
+  if (code === 'session_expired') return 'Sign in again to use Claude. These scenes came from a simpler parser.';
+  return 'Claude didn’t come through, so these scenes came from a simpler parser. You can rewrite them below.';
+}
+async function structureViaApi(text, flags, dreamId) {
+  if (store.mode !== 'supa' || !sb) return { locked: 'signin' };
+  if (!lookOf() && state.user) await askLook();
+  const miss = { note: 'This one came through a little hazy. Tap \u201cDream it again\u201d below for a clearer one.' };
+  const r = await askModel('storyboard', 'storyboard', dreamId, buildPrompt(text, flags));
+  if (r.locked) { LS.set('odo.dailyFull', isoDay(new Date())); return { locked: 'daily' }; }
+  if (!r.text) return miss;
+  try { return { result: normalize(parseJsonText(r.text), flags) }; } catch (e) { return miss; }
+}
+/* ---------- long model calls that survive a dropped connection ---------- */
+// Writing or reading a dream takes about a minute. If the phone drops the connection meanwhile
+// (app switched away, screen locked), the server still files the result in dream_results: collect it from there.
+async function filedResult(kind, dreamId) {
+  if (!sb || !state.user || !dreamId) return null;
+  try { const { data } = await sb.from('dream_results').select('text,updated_at').eq('dream_id', dreamId).eq('kind', kind).maybeSingle(); return data || null; } catch (e) { return null; }
+}
+async function waitFiled(kind, dreamId, after, ms) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    const r = await filedResult(kind, dreamId);
+    if (r && r.text && r.updated_at !== after) return r.text;
+    await wait(3000);
+  }
+  return '';
+}
+async function askModel(fn, kind, dreamId, prompt) {
+  const before = dreamId ? await filedResult(kind, dreamId) : null;
+  let res;
+  try { res = await sb.functions.invoke(fn, { body: { prompt, dreamId } }); } catch (e) { res = { error: e }; }
+  const { data, error } = res || {};
+  if (error && error.context && error.context.status === 429) return { locked: 'daily' };
+  if (!error && data && data.text) return { text: data.text };
+  if (!error && data && data.error) return {};                                  // the server finished and had nothing
+  if (error && error.context && typeof error.context.status === 'number') return {}; // a real server error, nothing will be filed
+  if (!dreamId) return {};
+  return { text: await waitFiled(kind, dreamId, before && before.updated_at, 180000) };
+}
+async function applyBoard(id, text) {
+  const cur = getDream(id); if (!cur || !text) return false;
+  let res; try { res = normalize(parseJsonText(text), { fragment: cur.fragment, lucid: cur.lucid, nightmare: cur.nightmare }); } catch (e) { return false; }
+  const nd = Object.assign({}, cur, res, { structuredBy: 'claude', frames: null }); delete nd.pending;
+  delete state.notes[id]; state.justMade = nd; state.dreams = state.dreams.map(x => x.id === id ? nd : x);
+  await saveDream(nd); return true;
+}
+// On launch, pick up anything the server finished while the app was closed.
+async function collectFiled() {
+  if (!sb || !state.user) return;
+  let rows = null;
+  try { ({ data: rows } = await sb.from('dream_results').select('dream_id,kind,text,updated_at')); } catch (e) { return; }
+  let changed = false;
+  for (const r of rows || []) {
+    const d = getDream(r.dream_id); if (!d || d.locked || d.sample) continue;
+    if (r.kind === 'storyboard' && d.structuredBy !== 'claude' && (!d.editedAt || r.updated_at > d.editedAt)) {
+      if (await applyBoard(d.id, r.text)) { changed = true; paintDream(d.id); }
+    } else if (r.kind === 'reading' && !d.reading) {
+      let reading = null; try { reading = normReading(parseJsonText(r.text)); } catch (e) {}
+      if (reading) { const nd = Object.assign({}, d, { reading }); state.dreams = state.dreams.map(x => x.id === d.id ? nd : x); if (state.justMade && state.justMade.id === d.id) state.justMade = nd; await saveDream(nd); changed = true; }
+    }
+  }
+  if (changed) renderAll();
+}
+
+async function structureWithClaude(text, flags, onStream, dreamId) {
+  if (!hasClaude) return structureViaApi(text, flags, dreamId);
+  if (state.claudeOff) return { note: sampleMessage('not_granted') };
+  const sample = await sampleP;
+  if (!sample) { state.claudeOff = true; return { note: sampleMessage('not_granted') }; }
+  try { const raw = await sample.json(buildPrompt(text, flags), { modelTier: 'default', onText: ({ text: tx }) => onStream && onStream(tx || '') }); return { result: normalize(raw, flags) }; }
+  catch (e) { const code = e && e.code || 'upstream_error'; if (SAMPLE_OFF.has(code)) state.claudeOff = true; return { note: sampleMessage(code) }; }
+}
+
+/* ---------- record screen: live shader + voice ---------- */
+const ambGL = makeGL(150, 266);
+if (ambGL) { ambGL.canvas.id = 'ambient'; ambGL.canvas.setAttribute('aria-hidden', 'true'); document.body.insertBefore(ambGL.canvas, document.body.firstChild); }
+const waveCv = $('#wave'), wctx = waveCv.getContext('2d');
+const voice = { mode: 'idle', level: 0, bins: null, analyser: null, stream: null, ac: null, rec: null, base: '', finalTxt: '', started: 0, ok: true, wantOn: false, lang: LS.get('odo.lang', 'en-US') };
+let makingOn = false, ambT = 0, ambLast = 0;
+function ambPalette() { const d = allDreams()[0]; return (d ? d.palette : MOODS.euphoric.pal).map(hex2rgb); }
+const ripples = []; let lastRipple = 0;
+function addRipple(strength) { ripples.push({ t0: performance.now() / 1000, s: strength }); if (ripples.length > 14) ripples.shift(); }
+function drawWave(t) {
+  const S = waveCv.width, cx = S / 2, cy = S / 2, R0 = S * .238; wctx.clearRect(0, 0, S, S);
+  const listening = voice.mode === 'listening';
+  // spawn: a slow breath when idle, a ripple per voice swell while recording
+  if (listening) { if (voice.level > .18 && t - lastRipple > .5 - voice.level * .3) { addRipple(.35 + voice.level * .65); lastRipple = t; } }
+  else if (!makingOn && t - lastRipple > 3.2) { addRipple(.28); lastRipple = t; }
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const rp = ripples[i], age = t - rp.t0, life = 2.6;
+    if (age > life) { ripples.splice(i, 1); continue; }
+    const k = age / life, r = R0 + (S * .5 - R0) * (1 - Math.pow(1 - k, 2.2));
+    wctx.strokeStyle = `rgba(255,255,255,${rp.s * (1 - k) * .55})`; wctx.lineWidth = S * (.009 * (1 - k) + .002);
+    wctx.beginPath(); wctx.arc(cx, cy, r, 0, 6.283); wctx.stroke();
+  }
+  if (listening) {
+    // a liquid rim that wobbles with your voice
+    const amp = S * (.006 + voice.level * .03); wctx.beginPath();
+    for (let i = 0; i <= 120; i++) {
+      const a = i / 120 * Math.PI * 2, rr = R0 + S * .012 + amp * (Math.sin(a * 3 + t * 2.4) * .6 + Math.sin(a * 5 - t * 3.1) * .4);
+      const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr; i ? wctx.lineTo(x, y) : wctx.moveTo(x, y);
+    }
+    wctx.closePath(); wctx.strokeStyle = `rgba(255,255,255,${.45 + voice.level * .4})`; wctx.lineWidth = S * .006; wctx.stroke();
+  }
+}
+function loop(now) {
+  const t = now / 1000, dt = Math.min(.1, (now - (ambLast || now)) / 1000); ambLast = now;
+  if (voice.mode === 'listening') {
+    if (voice.analyser) {
+      const arr = new Uint8Array(voice.analyser.frequencyBinCount); voice.analyser.getByteFrequencyData(arr);
+      const bins = []; let sum = 0; for (let i = 0; i < 45; i++) { const v = Math.pow(arr[2 + i] / 255, 1.3); bins.push(v); sum += v; }
+      voice.bins = bins.concat(bins.slice().reverse()); voice.level += (Math.min(1, (sum / 45) * 2.2) - voice.level) * .2;
+    } else { voice.level *= .94; const b = []; for (let i = 0; i < 90; i++) b.push(clamp01(voice.level * (.35 + .65 * Math.abs(Math.sin(i * .55 + t * 7))))); voice.bins = b; }
+    $('#recLabel').innerHTML = `Recording <span class="tdim">${fmtTime((Date.now() - voice.started) / 1000)}</span>`;
+  }
+  if (state.tab === 'record' || state.tab === 'auth') {
+    const energy = voice.mode === 'listening' ? .25 + voice.level * .9 : makingOn ? .5 : 0;
+    ambT += dt * (1 + energy * 2.5);
+    if (ambGL && !reduceMotion) ambGL.draw({ t: ambT + 30, mode: makingOn ? 5 : voice.mode === 'listening' ? 4 : 0, seed: 3.1, energy, light: [0, .02], pal: ambPalette(), dim: .62 });
+    drawWave(t);
+  }
+  requestAnimationFrame(loop);
+}
+function micPolicyAllows() { const p = document.permissionsPolicy || document.featurePolicy; try { return p && p.allowsFeature ? p.allowsFeature('microphone') : true; } catch (e) { return true; } }
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const NSR = NAT && NAT.speech || null;
+voice.ok = NSR ? true : micPolicyAllows() && !!(SR || (navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+
+const ta = $('#dreamText'), makeBtn = $('#makeBtn'), recBtn = $('#recBtn');
+ta.value = LS.get('odo.draft', '') || '';
+let draftTimer = 0;
+function showLive() {
+  const live = $('#live'), txt = ta.value.trim();
+  if (voice.mode === 'listening' && txt) { const tail = txt.length > 140 ? '…' + txt.slice(-140) : txt; live.textContent = tail; }
+  else live.textContent = '';
+}
+function onTextChange() {
+  const has = !!ta.value.trim(), listening = voice.mode === 'listening';
+  $('#recActions').hidden = !has || listening;
+  if (has && !listening) $('#composer').hidden = false;
+  $('#typeBtn').hidden = has || listening || !$('#composer').hidden;
+  if (!CSS.supports || !CSS.supports('field-sizing', 'content')) { ta.style.height = 'auto'; ta.style.height = Math.max(110, ta.scrollHeight) + 'px'; }
+  showLive();
+  clearTimeout(draftTimer); draftTimer = setTimeout(() => LS.set('odo.draft', ta.value), 400);
+}
+ta.addEventListener('input', onTextChange);
+function openComposer(focus) { $('#composer').hidden = false; onTextChange(); if (focus) { ta.focus(); const e = ta.value.length; try { ta.setSelectionRange(e, e); } catch (x) {} } }
+$('#typeBtn').addEventListener('click', () => openComposer(true));
+$('#clearBtn').addEventListener('click', () => {
+  if (voice.mode === 'listening') stopVoice(true);
+  ta.value = ''; LS.set('odo.draft', ''); $('#composer').hidden = true; ta.blur();
+  idleStatus(); onTextChange();
+});
+$$('.cue').forEach(b => b.addEventListener('click', () => { const v = ta.value.replace(/\s+$/, ''); ta.value = (v ? v + '\n' : '') + b.dataset.p + ' '; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); onTextChange(); }));
+function setLangUI() { $$('#langToggle button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === voice.lang))); }
+$$('#langToggle button').forEach(b => b.addEventListener('click', () => { voice.lang = b.dataset.lang; LS.set('odo.lang', voice.lang); setLangUI(); if (state.user && sb) sb.from('profiles').update({ lang: voice.lang }).eq('id', state.user.id).then(() => {});  if (voice.mode === 'listening') { stopVoice(true); startVoice(); } }));
+setLangUI();
+function idleStatus() {
+  const s = $('#recLabel'), help = $('#help');
+  $('#langToggle').hidden = !voice.ok;
+  recBtn.setAttribute('aria-pressed', 'false');
+  if (voice.ok) { s.textContent = ta.value.trim() ? 'Tap to keep talking' : 'Tap to record your dream'; help.hidden = true; recBtn.setAttribute('aria-label', 'Record your dream'); }
+  else {
+    s.textContent = coarse ? 'Tap to dictate' : 'Tap to write it down';
+    help.textContent = hasClaude ? (coarse ? 'Claude doesn’t give pages the microphone, so this opens your keyboard. Tap its mic key and talk.' : 'Claude doesn’t give pages the microphone. Open odo.html in Chrome to record by voice.') : (coarse ? 'The microphone isn’t available here, so this opens your keyboard. Tap its mic key and talk.' : 'The microphone isn’t available here. Type it, or use Chrome or Safari.');
+    help.hidden = false; recBtn.setAttribute('aria-label', 'Dictate your dream');
+  }
+}
+function dictate() { voice.mode = 'idle'; idleStatus(); if (ta.value.trim() && !/\s$/.test(ta.value)) ta.value += ' '; openComposer(true); }
+function blocked(msg) { voice.ok = false; stopVoice(true); idleStatus(); if (msg) toast(msg); dictate(); }
+async function startVoice() {
+  if (!voice.ok) return dictate();
+  const zh = voice.lang.startsWith('zh');
+  voice.base = ta.value.trim() ? ta.value.trim() + (zh ? '' : ' ') : ''; voice.finalTxt = ''; voice.wantOn = true;
+  if (NSR) return startNativeVoice();
+  let srStarted = false;
+  if (SR) {
+    try {
+      const rec = new SR(); voice.rec = rec; rec.continuous = true; rec.interimResults = true; rec.lang = voice.lang;
+      rec.onresult = e => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) { const res = e.results[i]; if (res.isFinal) voice.finalTxt += res[0].transcript.trim() + (zh ? '' : ' '); else interim += res[0].transcript; }
+        ta.value = voice.base + voice.finalTxt + interim; onTextChange();
+        if (!voice.analyser) voice.level = Math.min(1, voice.level + .45);
+      };
+      rec.onerror = e => { if (['not-allowed','service-not-allowed','audio-capture'].includes(e.error)) blocked(); else if (e.error === 'network') blocked('Speech-to-text needs a connection. Type it for now.'); };
+      rec.onend = () => { if (voice.wantOn && voice.mode === 'listening' && voice.rec === rec) { voice.base = ta.value.trim() ? ta.value.trim() + (zh ? '' : ' ') : ''; voice.finalTxt = ''; try { rec.start(); } catch (e) { stopVoice(); } } };
+      rec.start(); srStarted = true;
+    } catch (e) { srStarted = false; }
+  }
+  if (!isIOS && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      if (!voice.wantOn) { stream.getTracks().forEach(t => t.stop()); return; }
+      voice.stream = stream; const AC = window.AudioContext || window.webkitAudioContext; voice.ac = new AC();
+      const src = voice.ac.createMediaStreamSource(stream), an = voice.ac.createAnalyser(); an.fftSize = 256; an.smoothingTimeConstant = .72; src.connect(an); voice.analyser = an;
+    } catch (e) { if (!srStarted) return blocked(); }
+  }
+  if (!voice.wantOn) return;
+  if (!srStarted && !voice.stream) return blocked();
+  if (!srStarted) { stopVoice(true); toast('This browser can’t transcribe. Use Chrome or Safari, or type it.'); return dictate(); }
+  voice.mode = 'listening'; voice.started = Date.now(); $('#help').hidden = true; $('#composer').hidden = true;
+  recBtn.setAttribute('aria-pressed', 'true'); recBtn.setAttribute('aria-label', 'Stop recording'); onTextChange();
+}
+let nsrBound = false, nsrStarts = [];
+const NATIVE_DENIED = 'Turn on Microphone and Speech Recognition for odo in Settings, or type it.';
+async function startNativeVoice() {
+  try {
+    let p = await NSR.checkPermissions();
+    if (p.speechRecognition !== 'granted') p = await NSR.requestPermissions();
+    if (p.speechRecognition !== 'granted') return blocked(NATIVE_DENIED);
+  } catch (e) { return blocked(); }
+  if (!voice.wantOn) return;
+  if (!nsrBound) {
+    nsrBound = true;
+    NSR.addListener('partialResults', ev => {
+      if (voice.mode !== 'listening') return;
+      const m = (ev && ev.matches && ev.matches[0]) || ''; if (!m) return;
+      ta.value = voice.base + m; onTextChange();
+    });
+    NSR.addListener('audioLevel', ev => { if (voice.mode === 'listening') voice.level = Math.max(voice.level, Math.min(1, (ev && ev.level || 0) * 1.8)); });
+    NSR.addListener('listeningState', ev => {
+      const st = ev && (ev.state || ev.status);
+      if (st !== 'stopped' || !voice.wantOn || voice.mode !== 'listening') return;
+      const zh = voice.lang.startsWith('zh'); voice.base = ta.value.trim() ? ta.value.trim() + (zh ? '' : ' ') : '';
+      nativeGo();
+    });
+    NSR.addListener('error', ev => { if (/permi|denied|authori/i.test(ev ? (ev.code || '') + ' ' + (ev.message || '') : '')) blocked(NATIVE_DENIED); });
+  }
+  voice.mode = 'listening'; voice.started = Date.now(); $('#help').hidden = true; $('#composer').hidden = true;
+  recBtn.setAttribute('aria-pressed', 'true'); recBtn.setAttribute('aria-label', 'Stop recording'); onTextChange();
+  nativeGo();
+}
+function nativeGo() {
+  const now = Date.now(); nsrStarts = nsrStarts.filter(t => now - t < 5000); nsrStarts.push(now);
+  if (nsrStarts.length > 4) { stopVoice(); toast('Listening paused. Tap to keep talking.'); return; }
+  NSR.start({ language: voice.lang, partialResults: true, popup: false, maxResults: 1, addPunctuation: true })
+    .catch(() => { if (voice.wantOn && voice.mode === 'listening') { stopVoice(); toast('Couldn\u2019t start listening. Try again.'); } });
+}
+function stopVoice(silent) {
+  if (NSR && voice.wantOn) NSR.stop().catch(() => {});
+  voice.wantOn = false; const rec = voice.rec; voice.rec = null;
+  try { rec && rec.stop(); } catch (e) {}
+  if (voice.stream) voice.stream.getTracks().forEach(t => t.stop());
+  if (voice.ac) { try { voice.ac.close(); } catch (e) {} }
+  const was = voice.mode; voice.stream = null; voice.ac = null; voice.analyser = null; voice.mode = 'idle'; voice.level = 0;
+  if (!silent) { idleStatus(); if (was === 'listening' && ta.value.trim()) openComposer(false); showLive(); }
+  onTextChange();
+}
+recBtn.addEventListener('click', () => { if (NAT && NAT.haptic) NAT.haptic(); addRipple(1); lastRipple = performance.now() / 1000; if (voice.mode === 'listening') stopVoice(); else startVoice(); });
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function setMaking(on, line, sub) { makingOn = on; $('#recMid').hidden = on; $('#recBottom').hidden = on; $('#making').hidden = !on; if (line != null) $('#makingNow').textContent = line; if (sub != null) $('#makingSub').textContent = sub; }
+makeBtn.addEventListener('click', async () => {
+  const text = ta.value.trim(); if (!text) return;
+  if (voice.mode === 'listening') stopVoice(true);
+  const cjk = /[㐀-鿿]/.test(text), flags = { fragment: cjk ? text.length < 40 : text.split(/\s+/).length < 25 };
+  let lockedWhy = await canCompose(); if (lockedWhy === 'ok') lockedWhy = null;
+  setMaking(true, 'Reading your dream', 'A few seconds.');
+  await wait(500);
+  let result = null, note = null, lastCount = 0;
+  const now = new Date(), id = 'd' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 6);
+  if (!lockedWhy && store.mode === 'supa') {
+    // Keep the dream safe right away; if the app is closed while it's being written, the result is collected later.
+    await saveDream(Object.assign({ id, createdAt: now.toISOString(), dreamDate: isoDay(now), transcript: text, fragment: flags.fragment, seed: hashStr(id), structuredBy: 'local', pending: Date.now() }, localStructure(text, flags)));
+    LS.set('odo.draft', '');
+  }
+  if (!lockedWhy) {
+    setMaking(true, 'Finding the thread', 'The people, the places, the feeling of it');
+    const r = await structureWithClaude(text, flags, tx => { const n = (tx.match(/"caption"/g) || []).length; if (n !== lastCount && n > 0) { lastCount = n; setMaking(true, `Scene ${n}`, null); } }, id);
+    result = r.result || null; note = r.note || null; if (r.locked) lockedWhy = r.locked;
+  }
+  const s = result || localStructure(text, flags);
+  setMaking(true, lockedWhy ? 'Keeping it safe' : 'Weaving your dreamscape', lockedWhy ? 'Your dream is saved.' : `${s.scenes.length} scenes`);
+  const d = Object.assign({ id, createdAt: now.toISOString(), dreamDate: isoDay(now), transcript: text, fragment: flags.fragment, seed: hashStr(id), structuredBy: result ? 'claude' : 'local' }, s);
+  if (lockedWhy) { d.locked = lockedWhy; note = null; }
+  if (note) state.notes[id] = note;
+  thumb(d, 240); await wait(400);
+  state.justMade = d; await saveDream(d);
+  ta.value = ''; LS.set('odo.draft', ''); $('#composer').hidden = true; onTextChange(); idleStatus();
+  setMaking(false); openFilm(d.id, 'journal');
+  if (!lockedWhy) readDream(d.id);
+  if (!lockedWhy && result) paintDream(d.id);
+});
+
+/* ---------- film player ---------- */
+const film = $('#film'), fctx = film.getContext('2d');
+const P = { d: null, t: 0, playing: false, last: 0, raf: 0, rec: null };
+function updSegs() {
+  if (!P.d) return;
+  $$('#segs b').forEach((b, i) => { b.style.width = (clamp01((P.t - T.intro - i * T.scene) / T.scene) * 100) + '%'; });
+  const cur = Math.floor((P.t - T.intro) / T.scene);
+  $$('#story .row').forEach((b, i) => b.classList.toggle('on', P.t >= T.intro && i === cur));
+  if (P.rec) $('#recpill').textContent = `Saving ${fmtTime(P.t)} / ${fmtTime(filmLen(P.d))}`;
+}
+function pDraw() { if (!P.d) return; drawFrame(fctx, P.d, P.t); updSegs(); }
+function pLoop(now) {
+  if (!P.playing) return;
+  const dt = Math.min(.1, (now - P.last) / 1000); P.last = now; P.t += dt;
+  const L = filmLen(P.d);
+  if (P.t >= L) { P.t = L - .001; pDraw(); pStop(); if (P.rec) P.rec.stop(); return; }
+  pDraw(); P.raf = requestAnimationFrame(pLoop);
+}
+function pPlay() { if (!P.d) return; if (P.t >= filmLen(P.d) - .05) P.t = 0; P.playing = true; P.last = performance.now(); cancelAnimationFrame(P.raf); P.raf = requestAnimationFrame(pLoop); $('#paused').hidden = true; }
+function pStop() { P.playing = false; cancelAnimationFrame(P.raf); $('#paused').hidden = !!P.rec || state.tab !== 'film'; }
+function pSeek(t) { if (!P.d || P.rec) return; P.t = Math.max(0, Math.min(t, filmLen(P.d) - .001)); pDraw(); }
+function sceneJump(dir) {
+  const cur = Math.floor((P.t - T.intro) / T.scene), n = P.d.scenes.length;
+  const target = dir > 0 ? cur + 1 : (P.t - T.intro - Math.max(cur, 0) * T.scene > 1 ? cur : cur - 1);
+  if (target < 0) pSeek(0); else if (target >= n) pSeek(T.intro + n * T.scene); else pSeek(T.intro + target * T.scene + .01);
+  if (!P.playing) pPlay();
+}
+$('#stage').addEventListener('click', e => {
+  if (P.rec || e.target.closest('button') || e.target.closest('#lock')) return;
+  const r = $('#stage').getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+  if (x < .28) sceneJump(-1); else if (x > .72) sceneJump(1); else (P.playing ? pStop() : pPlay());
+});
+$('#back').addEventListener('click', () => show(state.backTo || 'journal'));
+function openFilm(id, from) {
+  const d = getDream(id); if (!d) { toast('That dream isn’t here anymore.'); return; }
+  state.backTo = from || (state.tab === 'film' ? state.backTo : state.tab);
+  state.currentId = id; P.ready = null; $('#exportLabel').textContent = 'Save'; show('film'); renderFilmMeta(d);
+  P.d = d; P.t = reduceMotion ? T.intro + T.scene * .5 : 0;
+  $('#segs').innerHTML = d.scenes.map(() => '<i><b></b></i>').join('');
+  pDraw(); if (!reduceMotion) pPlay(); else pStop();
+  window.scrollTo({ top: 0 });
+}
+function row(html) { const li = document.createElement('li'); li.innerHTML = html; return li; }
+function renderFilmMeta(d) {
+  const mood = MOODS[d.mood] || MOODS.eerie, bits = [cap1(d.mood), whenLabel(d.dreamDate)];
+  if (d.lucid) bits.push('Lucid'); if (d.nightmare) bits.push('Nightmare'); if (d.sample) bits.push('Example');
+  const fm = $('#filmMeta'); fm.innerHTML = `<span class="dot" style="background:${mood.c}"></span>`; fm.append(bits.join(' · '));
+  $('#filmTitle').textContent = d.title; $('#filmLogline').textContent = d.logline || '';
+  const note = state.notes[d.id] || ''; $('#filmNote').textContent = note; $('#filmNote').hidden = !note;
+  $('#copyWrap').hidden = true;
+  const story = $('#story'); story.innerHTML = '';
+  d.scenes.forEach((sc, i) => {
+    const li = document.createElement('li'), b = document.createElement('button'); b.className = 'row';
+    b.innerHTML = '<span class="n"></span><span class="c"></span><span></span>'; b.querySelector('.n').textContent = i + 1; b.querySelector('.c').textContent = sc.caption;
+    b.addEventListener('click', () => { pSeek(T.intro + i * T.scene + .05); if (!P.playing && !reduceMotion) pPlay(); window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' }); });
+    li.appendChild(b); story.appendChild(li);
+  });
+  $('#rebuildBtn').hidden = !(canClaude() && !d.sample && !state.claudeOff && !d.locked);
+  $('#lock').hidden = !d.locked; if (d.locked) lockCopy(d); $('#copyBtn').hidden = !!d.locked;
+  const tags = $('#tags'); tags.innerHTML = ''; let any = false;
+  [['people','People'],['places','Places'],['symbols','Things'],['emotions','Feelings']].forEach(([k, label]) => {
+    const vals = d[k] || []; if (!vals.length) return; any = true;
+    const g = document.createElement('div'); g.className = 'tagrow'; g.innerHTML = '<span class="l"></span><div class="chips"></div>'; g.querySelector('.l').textContent = label;
+    vals.forEach(v => { const b = document.createElement('button'); b.className = 'tag'; b.textContent = v; b.addEventListener('click', () => setFilter(k, v)); g.querySelector('.chips').appendChild(b); });
+    tags.appendChild(g);
+  });
+  $('#tagsWrap').hidden = !any;
+  $('#words').textContent = d.transcript || ''; wordsMode(false); $('#wordsEditBtn').hidden = !!d.sample;
+  const del = $('#deleteBtn'); del.parentElement.hidden = !!d.sample; del.textContent = 'Delete dream'; delete del.dataset.armed;
+  $('#railDelete').hidden = !!d.sample; $('#railDeleteLabel').textContent = 'Delete'; delete $('#railDelete').dataset.armed;
+  const seen = seenBefore(d), box = $('#seen'); box.innerHTML = ''; $('#seenWrap').hidden = !seen.length;
+  seen.forEach(o => {
+    const li = document.createElement('li'), b = document.createElement('button'); b.className = 'row';
+    b.innerHTML = '<img alt=""><span><span class="c"></span><span class="s"></span></span><svg class="chev" width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l6 6-6 6"/></svg>';
+    b.querySelector('img').src = thumb(o.d, 120); b.querySelector('.c').textContent = o.d.title; b.querySelector('.s').textContent = `${whenLabel(o.d.dreamDate)} · also has ${o.terms.slice(0, 2).join(', ')}`;
+    b.addEventListener('click', () => openFilm(o.d.id, state.backTo)); li.appendChild(b); box.appendChild(li);
+  });
+  downloadsP.then(dl => { $('#exportBtn').hidden = (hasClaude && !dl) || !!d.locked; });
+  $('#storyText').textContent = d.story || ''; $('#storyWrap').hidden = !d.story;
+  renderReading(d); healDream(d); paintNote(d.id);
+}
+const normTag = s => String(s).toLowerCase().trim().replace(/^(the|my|a|an)\s+/, '');
+function seenBefore(d) {
+  const mine = new Map(); ['people','places','symbols'].forEach(k => (d[k] || []).forEach(v => { const n = normTag(v); if (!mine.has(n)) mine.set(n, v); }));
+  return allDreams().filter(o => o.id !== d.id).map(o => {
+    const terms = []; ['people','places','symbols'].forEach(k => (o[k] || []).forEach(v => { const n = normTag(v); if (mine.has(n) && !terms.includes(mine.get(n))) terms.push(mine.get(n)); }));
+    return { d: o, terms };
+  }).filter(x => x.terms.length).sort((a, b) => b.terms.length - a.terms.length).slice(0, 3);
+}
+$('#railDelete').addEventListener('click', async () => {
+  const b = $('#railDelete'), l = $('#railDeleteLabel');
+  if (P.rec) return;
+  if (!b.dataset.armed) { b.dataset.armed = '1'; l.textContent = 'Sure?'; toast('Tap Delete again to remove this dream'); setTimeout(() => { if (b.dataset.armed) { delete b.dataset.armed; l.textContent = 'Delete'; } }, 3500); return; }
+  delete b.dataset.armed;
+  if (await removeDream(state.currentId)) { toast('Dream deleted'); show('journal'); }
+});
+$('#deleteBtn').addEventListener('click', async () => {
+  const b = $('#deleteBtn');
+  if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Tap again to delete'; setTimeout(() => { if (b.dataset.armed) { delete b.dataset.armed; b.textContent = 'Delete dream'; } }, 3500); return; }
+  if (await removeDream(state.currentId)) { toast('Dream deleted'); show('journal'); }
+});
+$('#rebuildBtn').addEventListener('click', async () => {
+  const d = getDream(state.currentId); if (!d) return;
+  const why = await canCompose(); if (why !== 'ok') { if (why === 'signin') show('auth'); else if (why === 'daily') toast('That\u2019s today\u2019s dreamscapes. More tomorrow.'); return; }
+  const b = $('#rebuildBtn'); b.disabled = true; b.textContent = 'Dreaming it again…';
+  const { result, note, locked } = await structureWithClaude(d.transcript, { fragment: d.fragment, lucid: d.lucid, nightmare: d.nightmare }, null, d.id);
+  b.disabled = false; b.textContent = 'Dream it again';
+  if (locked) { if (locked === 'daily') toast('That\u2019s today\u2019s dreamscapes. More tomorrow.'); return; }
+  if (!result) { state.notes[d.id] = note; renderFilmMeta(d); return; }
+  const nd = Object.assign({}, getDream(d.id) || d, result, { structuredBy: 'claude', seed: (Math.random() * 4294967295) >>> 0, frames: null }); delete nd.pending;
+  delete state.notes[d.id]; state.justMade = nd; state.dreams = state.dreams.map(x => x.id === nd.id ? nd : x);
+  await saveDream(nd); openFilm(nd.id, state.backTo);
+  paintDream(nd.id);
+});
+$('#copyBtn').addEventListener('click', () => {
+  const d = getDream(state.currentId); if (!d) return;
+  const text = `${d.title} — a dream I had ${relDay(d.dreamDate)}.\nmade with odo #dreams #dreamjournal`;
+  const fallback = () => { const f = $('#copybox'); f.value = text; $('#copyWrap').hidden = false; f.focus(); f.select(); toast('Select the caption and copy it'); };
+  try { navigator.clipboard.writeText(text).then(() => toast('Caption copied'), fallback); } catch (e) { fallback(); }
+});
+function pickMime() { const opts = [['video/mp4;codecs=avc1', 'mp4'], ['video/mp4', 'mp4'], ['video/webm;codecs=vp9', 'webm'], ['video/webm;codecs=vp8', 'webm'], ['video/webm', 'webm']]; for (const [m, ext] of opts) { try { if (MediaRecorder.isTypeSupported(m)) return { m, ext }; } catch (e) {} } return null; }
+async function saveBlob(blob, filename) {
+  if (NAT && NAT.share) { try { await NAT.share(blob, filename, P.d ? P.d.title : 'odo'); } catch (e) { if (!/cancel/i.test(String(e && e.message || e))) toast('Couldn\u2019t open sharing. Try again.'); } return; }
+  const dl = await downloadsP;
+  if (dl) {
+    try { await dl.save({ filename, data: blob }); toast('Saved. Post it anywhere.'); }
+    catch (e) { const c = e && e.code; toast(c === 'declined' ? 'Not saved' : c === 'rate_limited' ? 'A save prompt is already open' : c === 'too_large' ? 'Too large to save here' : 'Saving isn’t available here'); }
+    return;
+  }
+  if (!hasClaude) {
+    const file = new File([blob], filename, { type: blob.type });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { P.ready = file; $('#exportLabel').textContent = 'Share'; toast('Ready. Tap Share to post or save it.'); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Saved. Post it anywhere.'); }
+}
+$('#exportBtn').addEventListener('click', async () => {
+  if (P.ready) { const f = P.ready; P.ready = null; $('#exportLabel').textContent = 'Save'; try { await navigator.share({ files: [f], title: P.d ? P.d.title : 'odo' }); } catch (e) {} return; }
+  if (P.rec || !P.d) return;
+  const mime = window.MediaRecorder && film.captureStream ? pickMime() : null;
+  if (!mime) { toast('This browser can’t record video. Try Chrome or Safari on a computer.'); return; }
+  const d = P.d, stream = film.captureStream(30), chunks = [];
+  let rec; try { rec = new MediaRecorder(stream, { mimeType: mime.m, videoBitsPerSecond: 8e6 }); } catch (e) { toast('Recording couldn’t start here.'); return; }
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  const done = new Promise(r => { rec.onstop = r; });
+  P.rec = rec; pStop(); P.t = 0; $('#recpill').hidden = false; $('#exportLabel').textContent = 'Saving';
+  rec.start(250); pPlay();
+  await done;
+  stream.getTracks().forEach(t => t.stop());
+  P.rec = null; $('#recpill').hidden = true; $('#exportLabel').textContent = 'Save'; $('#paused').hidden = false;
+  const slug = d.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'dream';
+  await saveBlob(new Blob(chunks, { type: mime.m.split(';')[0] }), `odo-${slug}.${mime.ext}`);
+});
+
+/* ---------- dreams ---------- */
+function setFilter(kind, value) { state.filter = { kind, value }; state.query = ''; $('#search').value = ''; show('journal'); }
+function matches(d) {
+  if (state.filter) { const { kind, value } = state.filter, n = normTag(value); if (!(d[kind] || []).some(v => normTag(v) === n)) return false; }
+  const q = state.query.trim().toLowerCase(); if (!q) return true;
+  const hay = [d.title, d.logline, d.transcript, d.mood, ...(d.people || []), ...(d.places || []), ...(d.symbols || []), ...(d.emotions || []), ...(d.scenes || []).map(s => s.caption)].join(' ').toLowerCase();
+  return q.split(/\s+/).every(w => hay.includes(w));
+}
+function renderJournal() {
+  const all = allDreams(), mine = userDreams().length, filtering = !!(state.query.trim() || state.filter);
+  $('#dreamsCount').textContent = mine ? `${mine} saved` : '';
+  const feat = $('#feature'), top = all[0];
+  feat.hidden = !top || filtering;
+  if (top && !filtering) {
+    feat.querySelector('img').src = thumb(top, 540);
+    $('#featK').textContent = (top.sample ? 'Example · ' : '') + whenLabel(top.dreamDate);
+    $('#featT').textContent = top.title; feat.setAttribute('aria-label', `Play ${top.title}`); feat.onclick = () => openFilm(top.id, 'journal');
+  }
+  const f = $('#filter');
+  if (state.filter) { f.hidden = false; f.innerHTML = '<span class="sub">Showing</span><b></b><button>Clear</button>'; f.querySelector('b').textContent = state.filter.value; f.querySelector('button').onclick = () => { state.filter = null; renderJournal(); }; }
+  else f.hidden = true;
+  const list = (filtering ? all : all.slice(1)).filter(matches), grid = $('#grid'); grid.innerHTML = '';
+  let month = '';
+  list.forEach(d => {
+    const m = fromIso(d.dreamDate).toLocaleDateString('en-US', { month: 'long' });
+    if (m !== month) { month = m; const h = document.createElement('h2'); h.className = 'month'; h.textContent = m; grid.appendChild(h); }
+    const b = document.createElement('button'); b.className = 'tile'; b.setAttribute('aria-label', `${d.title}, ${fmtShort(d.dreamDate)}`);
+    b.innerHTML = '<img alt=""><span class="over"><span class="t"></span><span class="k"></span></span>';
+    b.querySelector('img').src = thumb(d, 240); b.querySelector('.t').textContent = d.title; b.querySelector('.k').textContent = fmtShort(d.dreamDate) + (d.lucid ? ' · Lucid' : '');
+    if (d.sample) { const e = document.createElement('span'); e.className = 'ex'; e.textContent = 'Example'; b.appendChild(e); }
+    if (d.locked) { const e = document.createElement('span'); e.className = 'lk'; e.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>'; b.appendChild(e); }
+    b.addEventListener('click', () => openFilm(d.id, 'journal')); grid.appendChild(b);
+  });
+  const empty = $('#empty');
+  if (!all.length) { empty.hidden = false; empty.innerHTML = '<h2>No dreams yet</h2><p>Your dreams will live here. Tell odo one tomorrow before you get out of bed.</p>'; }
+  else if (filtering && !list.length) { empty.hidden = false; empty.innerHTML = '<h2>No results</h2><p>Try another word or clear the filter.</p>'; }
+  else empty.hidden = true;
+}
+$('#search').addEventListener('input', e => { state.query = e.target.value; renderJournal(); });
+
+/* ---------- patterns ---------- */
+function tally(dreams, key) {
+  const m = new Map();
+  dreams.forEach(d => { new Set((d[key] || []).map(normTag)).forEach(n => { const e = m.get(n) || { label: (d[key] || []).find(v => normTag(v) === n) || n, n: 0, kind: key, ds: [] }; e.n++; e.ds.push(d); m.set(n, e); }); });
+  return [...m.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+}
+function streak(dreams) { const days = new Set(dreams.map(d => d.dreamDate)); const cur = new Date(); let n = 0; if (!days.has(isoDay(cur))) cur.setDate(cur.getDate() - 1); while (days.has(isoDay(cur))) { n++; cur.setDate(cur.getDate() - 1); } return n; }
+function renderPatterns() {
+  const ds = allDreams();
+  const sym = tally(ds, 'symbols'), ppl = tally(ds, 'people'), plc = tally(ds, 'places'), emo = tally(ds, 'emotions');
+  const st = $('#stats'); st.innerHTML = '';
+  [[ds.length, 'Dreams'], [streak(ds), 'Day streak'], [ds.filter(d => d.lucid).length, 'Lucid']].forEach(([v, l]) => { const s = document.createElement('div'); s.className = 'stat'; s.innerHTML = '<b></b><span></span>'; s.querySelector('b').textContent = v; s.querySelector('span').textContent = l; st.appendChild(s); });
+  const cal = $('#calgrid'); cal.innerHTML = '';
+  ['M','T','W','T','F','S','S'].forEach(x => { const h = document.createElement('span'); h.className = 'wd'; h.textContent = x; cal.appendChild(h); });
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const start = new Date(today); start.setDate(start.getDate() - ((today.getDay() + 6) % 7) - 28);
+  const byDay = new Map(); ds.forEach(d => { if (!byDay.has(d.dreamDate)) byDay.set(d.dreamDate, d); });
+  const used = new Set();
+  for (let i = 0; i < 35; i++) {
+    const day = new Date(start); day.setDate(start.getDate() + i); const key = isoDay(day), d = byDay.get(key);
+    const el = document.createElement(d ? 'button' : 'span'); el.className = 'c'; el.textContent = day.getDate();
+    if (key === isoDay(today)) el.classList.add('today');
+    if (day > today) el.classList.add('future');
+    if (d) { el.style.background = (MOODS[d.mood] || MOODS.eerie).c; el.setAttribute('aria-label', `${fmtShort(key)}: ${d.title}`); el.title = d.title; el.addEventListener('click', () => openFilm(d.id, 'patterns')); used.add(d.mood); }
+    cal.appendChild(el);
+  }
+  const lg = $('#legend'); lg.innerHTML = '';
+  [...used].forEach(m => { const s = document.createElement('span'); s.innerHTML = `<span class="dot" style="background:${(MOODS[m] || MOODS.eerie).c}"></span>`; s.append(cap1(m)); lg.appendChild(s); });
+  const rec = [...ppl, ...plc, ...sym].filter(x => x.n > 1).sort((a, b) => b.n - a.n).slice(0, 6), rc = $('#recur'); rc.innerHTML = '';
+  if (!rec.length) rc.appendChild(row('<span class="row"><span></span><span class="c" style="color:var(--muted)">Nothing repeats yet. People and places that show up twice land here.</span><span></span></span>'));
+  rec.forEach(e => {
+    const li = document.createElement('li'), b = document.createElement('button'); b.className = 'row';
+    b.innerHTML = '<span class="stack"></span><span><span class="c"></span><span class="s"></span></span><span class="count"></span>';
+    e.ds.slice(0, 3).forEach(d => { const im = document.createElement('img'); im.alt = ''; im.src = thumb(d, 120); b.querySelector('.stack').appendChild(im); });
+    b.querySelector('.c').textContent = cap1(e.label); b.querySelector('.s').textContent = { people: 'Person', places: 'Place', symbols: 'Thing' }[e.kind]; b.querySelector('.count').textContent = `${e.n}×`;
+    b.addEventListener('click', () => setFilter(e.kind, e.label)); li.appendChild(b); rc.appendChild(li);
+  });
+  const feel = $('#feel'); feel.innerHTML = ''; $('#feelWrap').hidden = !emo.length;
+  if (emo.length) {
+    const tones = ['#FFFFFF', 'rgba(255,255,255,.7)', 'rgba(255,255,255,.48)', 'rgba(255,255,255,.3)', 'rgba(255,255,255,.18)'];
+    const top = emo.slice(0, 5), total = top.reduce((n, e) => n + e.n, 0);
+    const bar = document.createElement('div'); bar.className = 'feelbar';
+    top.forEach((e, i) => { const s = document.createElement('i'); s.style.flex = String(e.n); s.style.background = tones[i]; bar.appendChild(s); });
+    const chips = document.createElement('div'); chips.className = 'chips';
+    top.forEach((e, i) => { const b = document.createElement('button'); b.className = 'tag'; b.innerHTML = `<span class="dot" style="background:${tones[i]};margin-right:6px"></span>`; b.append(`${e.label} ${Math.round(e.n / total * 100)}%`); b.addEventListener('click', () => setFilter('emotions', e.label)); chips.appendChild(b); });
+    feel.append(bar, chips);
+  }
+  $('#foot').textContent = store.mode === 'db' ? 'Your dreams are private and sync wherever you open Odo in Claude.' : store.mode === 'local' ? 'Your dreams are saved in this browser.' : '';
+}
+
+/* ---------- record copy ---------- */
+function renderRecord() {
+  const s = streak(userDreams()), el = $('#streak'); el.hidden = !s; el.textContent = `${s}-day streak`;
+  updAvatar();
+}
+
+/* ---------- navigation ---------- */
+function show(tab) {
+  if (tab !== 'film') { if (P.rec) { toast('Wait for it to finish saving.'); return; } state.tab = tab; pStop(); }
+  if (tab !== 'record' && voice.mode === 'listening') stopVoice();
+  state.tab = tab; document.body.dataset.tab = tab;
+  ['record','journal','patterns','film','auth','profile'].forEach(v => { $('#view-' + v).hidden = v !== tab; });
+  $$('[data-tab]').forEach(b => { if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+  if (tab === 'journal') renderJournal(); else if (tab === 'patterns') renderPatterns(); else if (tab === 'record') renderRecord(); else if (tab === 'profile') renderProfile();
+  if (tab !== 'film') window.scrollTo({ top: 0 });
+}
+$$('[data-tab]').forEach(b => b.addEventListener('click', () => show(b.dataset.tab)));
+function renderAll() {
+  if (state.tab === 'journal') renderJournal(); else if (state.tab === 'patterns') renderPatterns(); else if (state.tab === 'record') renderRecord(); else if (state.tab === 'profile') renderProfile();
+  else if (state.tab === 'film') { const d = getDream(state.currentId); if (d && P.d && d !== P.d && d.id === P.d.id && !P.rec) { P.d = d; renderFilmMeta(d); if (!P.playing) pDraw(); } }
+}
+let toastTimer = 0;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3400); }
+
+/* ---------- sign in ---------- */
+let authMode = 'in';
+function authMsg(t, err) { const m = $('#authMsg'); m.textContent = t; m.hidden = !t; m.classList.toggle('err', !!err); }
+function friendlyAuth(e) {
+  const m = (e && e.message || '').toLowerCase();
+  if (m.includes('invalid login')) return 'That email and password don\u2019t match.';
+  if (m.includes('not confirmed')) return 'Confirm your email first. Check your inbox for the link.';
+  if (m.includes('already registered')) return 'That email already has an account. Sign in instead.';
+  if (m.includes('rate') || m.includes('security purposes')) return 'Too many tries. Wait a minute, then try again.';
+  return (e && e.message) || 'Something went wrong. Try again.';
+}
+$$('#authForm [data-mode]').forEach(b => b.addEventListener('click', () => {
+  authMode = b.dataset.mode;
+  $$('#authForm [data-mode]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  $('#nameField').hidden = authMode !== 'up';
+  $('#authSubmit').textContent = authMode === 'up' ? 'Create account' : 'Sign in';
+  $('#authPass').setAttribute('autocomplete', authMode === 'up' ? 'new-password' : 'current-password');
+  $('#forgotBtn').hidden = authMode === 'up'; authMsg('');
+}));
+$('#authForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!sb) return authMsg('Can\u2019t reach odo right now. Check your connection.', true);
+  const email = $('#authEmail').value.trim(), password = $('#authPass').value;
+  if (!/^\S+@\S+\.\S+$/.test(email)) return authMsg('Enter a valid email address.', true);
+  if (password.length < 6) return authMsg('Use at least 6 characters for the password.', true);
+  const btn = $('#authSubmit'); btn.disabled = true; authMsg('');
+  try {
+    if (authMode === 'up') {
+      const name = $('#authName').value.trim();
+      const { data, error } = await sb.auth.signUp({ email, password, options: { data: name ? { display_name: name } : {}, emailRedirectTo: NAT ? 'https://odo3.vercel.app' : location.origin } });
+      if (error) throw error;
+      if (!data.session) authMsg('Almost there. Tap the link we emailed you, then come back and sign in.');
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    }
+  } catch (err) { authMsg(friendlyAuth(err), true); }
+  finally { btn.disabled = false; }
+});
+$('#forgotBtn').addEventListener('click', async () => {
+  if (!sb) return;
+  const email = $('#authEmail').value.trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) return authMsg('Type your email above first.', true);
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: NAT ? 'https://odo3.vercel.app' : location.origin });
+  authMsg(error ? friendlyAuth(error) : 'Sent. Open the link in the email to set a new password.', !!error);
+});
+$('#guestBtn').addEventListener('click', () => { LS.set('odo.guest', true); show('record'); });
+
+/* ---------- profile ---------- */
+$('#avatarBtn').addEventListener('click', () => show('profile'));
+$('#profileDone').addEventListener('click', () => show('record'));
+$('#goSignIn').addEventListener('click', () => show('auth'));
+$('#profName').addEventListener('change', async e => {
+  const v = e.target.value.trim().slice(0, 40); if (!state.user) return;
+  const { error } = await sb.from('profiles').update({ display_name: v || null }).eq('id', state.user.id);
+  if (error) return toast('Couldn\u2019t save your name.');
+  state.profile = Object.assign({}, state.profile, { display_name: v }); updAvatar(); renderProfile(); toast('Saved');
+});
+$('#setPassBtn').addEventListener('click', async () => {
+  const v = $('#newPass').value; if (v.length < 6) return toast('Use at least 6 characters.');
+  const { error } = await sb.auth.updateUser({ password: v });
+  if (error) return toast(friendlyAuth(error));
+  state.recovery = false; $('#newPass').value = ''; renderProfile(); toast('Password updated');
+});
+$('#signOutBtn').addEventListener('click', async () => { if (sb) await sb.auth.signOut(); });
+$('#deleteAcctBtn').addEventListener('click', async () => {
+  const b = $('#deleteAcctBtn');
+  if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Tap again to delete your account and every dream'; setTimeout(() => { if (b.dataset.armed) { delete b.dataset.armed; b.textContent = 'Delete account'; } }, 4000); return; }
+  b.disabled = true; b.textContent = 'Deleting\u2026';
+  const { error } = await sb.functions.invoke('delete-account', { body: {} });
+  b.disabled = false;
+  if (error) { b.textContent = 'Delete account'; delete b.dataset.armed; return toast('Couldn\u2019t delete the account. Try again.'); }
+  toast('Account deleted'); await sb.auth.signOut();
+});
+
+/* ---------- painted frames: one illustration per scene ---------- */
+const frames = { imgs: new Map(), busy: new Set(), asked: new Set(), rows: new Map() };
+let framesReadyDone; frames.ready = new Promise(r => { framesReadyDone = r; });
+const framesOf = d => (d && frames.rows.get(d.id)) || (d && d.frames) || null;
+// Any pictures this dream has, even from before its last rewrite. Shown while new ones paint, so it never drops back to the plain look.
+function anyFrames(d) { const f = framesOf(d); return f && Array.isArray(f.paths) && f.paths.some(Boolean) ? f : null; }
+async function loadFrameRows() {
+  if (!sb || !state.user) { framesReadyDone(); return; }
+  try { const { data } = await sb.from('dream_frames').select('dream_id,key,paths'); (data || []).forEach(r => frames.rows.set(r.dream_id, { key: r.key, paths: r.paths })); } catch (e) {}
+  framesReadyDone(); renderAll();
+}
+const sceneKey = d => String(hashStr((d.scenes || []).map(s => (s.caption || '') + '|' + (s.shot || '')).join('\n') + lookSig()));
+function framesValid(d) { const f = framesOf(d); return !!(f && f.key === sceneKey(d) && Array.isArray(f.paths) && f.paths.some(Boolean)); }
+function canPaint(d) { return !hasClaude && store.mode === 'supa' && !!state.user && !!sb && !!d && !d.locked && !d.sample && d.structuredBy === 'claude' && (d.scenes || []).length > 0; }
+function loadFrames(d) {
+  if (!anyFrames(d) || !sb) return;
+  const need = anyFrames(d).paths.filter(p => p && !frames.imgs.has(p) && !frames.asked.has(p));
+  if (!need.length) return;
+  need.forEach(p => frames.asked.add(p));
+  sb.storage.from('dreamscapes').createSignedUrls(need, 60 * 60 * 12).then(({ data }) => {
+    (data || []).forEach(x => {
+      if (!x || !x.signedUrl) { if (x && x.path) frames.asked.delete(x.path); return; }
+      const img = new Image(); img.crossOrigin = 'anonymous'; img.decoding = 'async';
+      img.onload = () => { frames.imgs.set(x.path, img); frameLoaded(d.id); };
+      img.onerror = () => frames.asked.delete(x.path);
+      img.src = x.signedUrl;
+    });
+  }).catch(() => need.forEach(p => frames.asked.delete(p)));
+}
+let frameTimer = 0;
+function frameLoaded(id) {
+  clearTimeout(frameTimer);
+  frameTimer = setTimeout(() => { if (state.tab === 'film' && P.d && P.d.id === id && !P.playing && !P.rec) pDraw(); if (state.tab === 'journal') renderJournal(); }, 150);
+}
+function frameFor(d, i) {
+  const f = anyFrames(d); if (!f) return null;
+  let p;
+  if (framesValid(d)) p = f.paths[i];
+  else { const ps = f.paths.filter(Boolean); p = ps[Math.min(i, ps.length - 1)]; }
+  if (!p) return null;
+  const img = frames.imgs.get(p); if (img) return img;
+  loadFrames(d); return null;
+}
+function paintNote(id) {
+  if (state.tab !== 'film' || state.currentId !== id) return;
+  const note = $('#filmNote');
+  if (frames.busy.has(id)) { note.textContent = 'Painting your dream… about 30 seconds.'; note.hidden = false; }
+  else { const t = state.notes[id] || ''; note.textContent = t; note.hidden = !t; }
+}
+async function paintDream(id) {
+  // Wait until the saved pictures have loaded, so opening a dream right after launch never repaints it for nothing.
+  await Promise.race([frames.ready, wait(6000)]);
+  if (!lookOf() && canPaint(getDream(id))) await askLook();
+  const d = getDream(id); if (!canPaint(d) || frames.busy.has(id) || framesValid(d)) return;
+  frames.busy.add(id); paintNote(id);
+  let paths = null, daily = false;
+  try {
+    const shots = d.scenes.map(s => [lookLine(), s.shot || s.caption, d.cast ? 'Characters: ' + d.cast : ''].filter(Boolean).join(' '));
+    const { data, error } = await sb.functions.invoke('illustrate', { body: { dreamId: id, shots, key: sceneKey(d) } });
+    if (error && error.context && error.context.status === 429) { daily = true; LS.set('odo.dailyFull', isoDay(new Date())); }
+    else if (!error && data && Array.isArray(data.paths)) paths = data.paths;
+  } catch (e) {}
+  frames.busy.delete(id);
+  const cur = getDream(id);
+  if (paths) frames.rows.set(id, { key: sceneKey(d), paths });
+  if (paths && cur && sceneKey(cur) === sceneKey(d)) loadFrames(cur); else if (daily) toast('That’s today’s dreamscapes. The pictures can paint tomorrow.');
+  else if (!paths) toast('Couldn’t paint this one just now. Tap Dream it again to retry.');
+  paintNote(id); renderAll();
+}
+
+/* ---------- reading: an interpretation of each dream ---------- */
+function buildReadPrompt(d, others) {
+  const zh = /[㐀-鿿]/.test(d.transcript || '');
+  const past = (others || []).slice(0, 6).map(o => `- ${o.dreamDate}: ${o.title}${(o.people || []).length ? ' (people: ' + o.people.join(', ') + ')' : ''}${(o.places || []).length ? ' (places: ' + o.places.join(', ') + ')' : ''}`).join('\n');
+  return `You are the dream reader inside odo, a dream journal. Someone woke up and told odo a dream (speech-to-text, so expect run-ons and misheard words). Write them a reading of it.
+
+How to read:
+- Stay close to what they actually said. Name the specific images, people and moments of this dream. Never write a sentence that could fit any dream.
+- Dreams mostly rework recent feelings, wants, worries and relationships. Find the emotional logic: what the dreamer wanted, resisted, feared or felt judged for, and where the feeling turns.
+- A person in a dream may be themselves or a stand-in for a role, a quality or a feeling. Say what they might stand for here; don't claim to know.
+- Be specific and honest, warm but never gushing. No therapy-speak, no diagnoses, no predictions, no moralizing, no advice about their life. Never mention being an AI.
+- Sexual, violent or shameful content gets read plainly and without judgment, the way a perceptive friend would.
+- Hedge lightly: an occasional "maybe" or "或许" is enough to show this is a reading, not a fact.
+- Write in English, in plain, natural sentences, even if the dream was told in another language. No closing epigrams or summary one-liners at the end of paragraphs. Keep personal names as the dreamer wrote them; translate family words (妈妈 → Mom).
+- If their earlier dreams below share people, places or feelings with this one, point out the connection in one of the threads. Ignore them if nothing connects.
+
+Reply with only JSON in this shape:
+{"headline":"","reading":["",""],"threads":[{"title":"","body":""}],"symbols":[{"symbol":"","meaning":""}],"folk":"","question":""}
+- headline: one sentence naming the emotional core of this dream (at most 20 words).
+- reading: 2 or 3 short paragraphs, 2 to 4 sentences each.
+- threads: 2 or 3 strands worth noticing. title: 2 to 6 words. body: 1 to 3 sentences.
+- symbols: up to 4 images from this dream and what they might stand for in it.
+- folk: one or two sentences on how a traditional dream book would read the dream's main image (${zh ? 'the Chinese Zhou Gong dream book, 周公解梦' : 'common folklore'}). Light and clearly folklore.
+- question: one question for the dreamer to sit with, specific to this dream.
+
+Their earlier dreams:
+${past || '(none yet)'}
+
+The dream${d.dreamDate ? ' (' + d.dreamDate + ')' : ''}:
+"""
+${String(d.transcript || '').slice(0, 8000)}
+"""`;
+}
+const reading = { busy: new Set() };
+const rdStr = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
+function normReading(raw) {
+  if (!raw || typeof raw !== 'object') throw new Error('shape');
+  const paras = (Array.isArray(raw.reading) ? raw.reading : [raw.reading]).map(x => rdStr(x, 900)).filter(Boolean).slice(0, 3);
+  if (!paras.length) throw new Error('empty');
+  return {
+    headline: rdStr(raw.headline, 200), reading: paras,
+    threads: (Array.isArray(raw.threads) ? raw.threads : []).map(t => ({ title: rdStr(t && t.title, 60), body: rdStr(t && t.body, 500) })).filter(t => t.body).slice(0, 3),
+    symbols: (Array.isArray(raw.symbols) ? raw.symbols : []).map(t => ({ symbol: rdStr(t && t.symbol, 40), meaning: rdStr(t && t.meaning, 300) })).filter(t => t.symbol && t.meaning).slice(0, 4),
+    folk: rdStr(raw.folk, 400), question: rdStr(raw.question, 300), at: new Date().toISOString()
+  };
+}
+const parseJsonText = t => { const i = t.indexOf('{'), j = t.lastIndexOf('}'); return JSON.parse(t.slice(i, j + 1)); };
+async function interpret(prompt, dreamId) {
+  if (hasClaude) {
+    const sample = await sampleP; if (!sample) return {};
+    try { return { reading: normReading(await sample.json(prompt, { modelTier: 'default' })) }; } catch (e) { return {}; }
+  }
+  if (store.mode !== 'supa' || !sb || !state.user) return { locked: 'signin' };
+  try {
+    const r = await askModel('interpret', 'reading', dreamId, prompt);
+    if (r.locked) return { locked: 'daily' };
+    if (!r.text) return {};
+    return { reading: normReading(parseJsonText(r.text)) };
+  } catch (e) { return {}; }
+}
+// Dreams saved before the composer worked (or when it failed) get rebuilt and read the next time they're opened.
+const healed = new Set();
+async function healDream(d) {
+  if (!canRead(d) || healed.has(d.id) || state.claudeOff) return;
+  healed.add(d.id);
+  if (!hasClaude && !LS.get('odo.aiOk', false)) return;
+  const cjk = t => /[\u3400-\u9fff]/.test(t || '');
+  const stale = d.structuredBy !== 'claude' || !(d.scenes || []).some(s => s.shot) || !d.story || cjk(d.title);
+  if (stale && lockWhy() === 'ok') {
+    const note = $('#filmNote'); note.textContent = 'Bringing this dream into focus…'; note.hidden = false;
+    let r = {};
+    const filed = !hasClaude && d.structuredBy !== 'claude' ? await filedResult('storyboard', d.id) : null;
+    const inFlight = d.pending && Date.now() - d.pending < 240000;
+    let text = filed && filed.text && (!d.editedAt || filed.updated_at > d.editedAt) ? filed.text : '';
+    if (!text && inFlight) text = await waitFiled('storyboard', d.id, filed && filed.updated_at, 240000 - (Date.now() - d.pending));
+    if (text) { try { r = { result: normalize(parseJsonText(text), { fragment: d.fragment, lucid: d.lucid, nightmare: d.nightmare }) }; } catch (e) {} }
+    if (!r.result) r = await structureWithClaude(d.transcript, { fragment: d.fragment, lucid: d.lucid, nightmare: d.nightmare }, null, d.id);
+    const cur = getDream(d.id);
+    if (r.result && cur) {
+      const nd = Object.assign({}, cur, r.result, { structuredBy: 'claude', frames: null }); delete nd.pending;
+      delete state.notes[d.id]; state.justMade = nd; state.dreams = state.dreams.map(x => x.id === nd.id ? nd : x);
+      await saveDream(nd);
+      if (state.tab === 'film' && state.currentId === nd.id) openFilm(nd.id, state.backTo); else renderAll();
+    } else if (state.tab === 'film' && state.currentId === d.id) { note.hidden = !state.notes[d.id]; note.textContent = state.notes[d.id] || ''; }
+  }
+  let cur = getDream(d.id);
+  if (cur && cur.reading && cjk(cur.reading.headline)) { const nd = Object.assign({}, cur); delete nd.reading; state.justMade = nd; state.dreams = state.dreams.map(x => x.id === nd.id ? nd : x); cur = nd; }
+  if (cur && !cur.reading) readDream(d.id);
+  if (cur && !framesValid(cur)) paintDream(cur.id);
+}
+function canRead(d) { return !!d && !d.sample && !d.locked && !!d.transcript && (hasClaude || (store.mode === 'supa' && !!state.user)); }
+async function readDream(id, manual) {
+  const d = getDream(id); if (!canRead(d) || reading.busy.has(id)) return;
+  if (!hasClaude && !LS.get('odo.aiOk', false) && !(await askConsent())) return;
+  reading.busy.add(id); if (state.tab === 'film' && state.currentId === id) renderReading(d);
+  const others = userDreams().filter(o => o.id !== id && !o.locked && o.title).slice(0, 6);
+  const res = await interpret(buildReadPrompt(d, others), id);
+  reading.busy.delete(id);
+  const cur = getDream(id); if (!cur) return;
+  if (res.reading) {
+    const nd = Object.assign({}, cur, { reading: res.reading });
+    state.justMade = nd; state.dreams = state.dreams.map(x => x.id === id ? nd : x);
+    await saveDream(nd);
+  } else if (manual) toast(res.locked === 'daily' ? 'That’s today’s readings. More tomorrow.' : 'Couldn’t read it just now. Try again in a moment.');
+  if (state.tab === 'film' && state.currentId === id) renderReading(getDream(id));
+}
+function renderReading(d) {
+  const wrap = $('#readWrap'), box = $('#reading');
+  if (!d || (!d.reading && !canRead(d))) { wrap.hidden = true; return; }
+  const zh = /[㐀-鿿]/.test(d.transcript || '');
+  const L = { h: 'Reading', sym: 'Symbols', folk: 'Folklore', q: 'Something to sit with', btn: 'Read this dream', wait: 'Reading your dream…' };
+  wrap.hidden = false; $('#readH').textContent = L.h; box.innerHTML = '';
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  if (reading.busy.has(d.id)) { const w = el('p', 'wait'); w.append(el('i'), L.wait); box.append(w); return; }
+  const r = d.reading;
+  if (!r) { const b = el('button', 'btn glass', L.btn); b.addEventListener('click', () => readDream(d.id, true)); box.append(b); return; }
+  if (r.headline) box.append(el('p', 'hl', r.headline));
+  r.reading.forEach(t => box.append(el('p', null, t)));
+  if (r.threads.length) { const t = el('div', 'thr'); r.threads.forEach(x => { const row = el('div'); row.append(el('b', null, x.title), el('span', null, x.body)); t.append(row); }); box.append(t); }
+  if (r.symbols.length) { const t = el('div', 'sym'); t.append(el('span', 'lab', L.sym)); r.symbols.forEach(x => { const row = el('div'); row.append(el('b', null, x.symbol), x.meaning); t.append(row); }); box.append(t); }
+  if (r.folk) { const f = el('div', 'folk'); f.append(el('b', null, L.folk + ' · '), r.folk); box.append(f); }
+  if (r.question) { box.append(el('span', 'lab', L.q), el('div', 'q', r.question)); }
+}
+
+/* ---------- editing what you said ---------- */
+function wordsMode(on) {
+  $('#words').hidden = on; $('#wordsEdit').hidden = !on; $('#wordsEditBtn').hidden = on; $('#wordsActs').hidden = !on;
+}
+$('#wordsEditBtn').addEventListener('click', () => {
+  const d = getDream(state.currentId); if (!d) return;
+  if (P.playing) pStop();
+  const ta2 = $('#wordsEdit'); ta2.value = d.transcript || ''; wordsMode(true);
+  ta2.style.height = 'auto'; ta2.style.height = Math.max(180, ta2.scrollHeight + 4) + 'px'; ta2.focus();
+});
+$('#wordsCancel').addEventListener('click', () => wordsMode(false));
+$('#wordsSave').addEventListener('click', async () => {
+  const d = getDream(state.currentId); if (!d) return;
+  const text = $('#wordsEdit').value.trim();
+  if (!text) { toast('A dream needs at least a few words.'); return; }
+  if (text === (d.transcript || '').trim()) { wordsMode(false); return; }
+  const nd = Object.assign({}, d, { transcript: text, editedAt: new Date().toISOString() });
+  delete nd.reading; nd.frames = null;
+  const rebuild = canRead(nd);
+  if (rebuild) nd.structuredBy = 'local';
+  state.justMade = nd; state.dreams = state.dreams.map(x => x.id === nd.id ? nd : x);
+  await saveDream(nd);
+  healed.delete(nd.id);
+  toast(rebuild ? 'Saved. Updating the scenes and reading…' : 'Saved');
+  openFilm(nd.id, state.backTo);
+});
+
+/* ---------- locks + consent ---------- */
+function lockWhy() {
+  if (hasClaude) return 'ok';
+  if (store.mode !== 'supa' || !state.user) return 'signin';
+  return 'ok';
+}
+async function canCompose() {
+  const why = lockWhy(); if (why !== 'ok') return why;
+  if (!hasClaude && !LS.get('odo.aiOk', false) && !(await askConsent())) return 'consent';
+  return 'ok';
+}
+function lockCopy(d) {
+  const M = {
+    signin: ['Your dream is saved.', 'Make a free account to step inside it.', 'Sign in'],
+    daily: ['Your dream is saved.', 'You’ve stepped into a lot of dreams today. This one will be ready tomorrow.', 'Got it'],
+    ok: ['Your dream is saved.', 'Step inside whenever you’re ready.', 'Step inside']
+  }[lockWhy()] || [];
+  $('#lockT').textContent = M[0]; $('#lockP').textContent = M[1]; const b = $('#lockBtn'); b.textContent = M[2]; b.disabled = false;
+}
+$('#lockBtn').addEventListener('click', async () => {
+  const d = getDream(state.currentId); if (!d || !d.locked) return;
+  const why = lockWhy();
+  if (why === 'signin') return show('auth');
+  if (why === 'daily') return toast('Ready again tomorrow.');
+  if (!LS.get('odo.aiOk', false) && !(await askConsent())) return;
+  const b = $('#lockBtn'); b.disabled = true; b.textContent = 'Opening…';
+  const r = await structureWithClaude(d.transcript, { fragment: d.fragment, lucid: d.lucid, nightmare: d.nightmare }, null, d.id);
+  if (r.locked) { lockCopy(d); return; }
+  if (!r.result) { lockCopy(d); toast('Couldn’t open it just now. Try again in a moment.'); return; }
+  const nd = Object.assign({}, d, r.result, { structuredBy: 'claude', frames: null }); delete nd.locked;
+  if (NAT && NAT.haptic) NAT.haptic('MEDIUM');
+  delete state.notes[d.id]; state.justMade = nd; state.dreams = state.dreams.map(x => x.id === nd.id ? nd : x);
+  await saveDream(nd); openFilm(nd.id, state.backTo);
+  if (!nd.reading) readDream(nd.id);
+  paintDream(nd.id);
+});
+
+let consentResolve = null;
+function askConsent() { return new Promise(res => { consentResolve = res; $('#sheetBg').hidden = false; $('#consent').hidden = false; }); }
+function closeSheets() {
+  $('#sheetBg').hidden = true; $('#consent').hidden = true;
+  if (!$('#lookSheet').hidden) { $('#lookSheet').hidden = true; const r = lookResolve; lookResolve = null; lookAsk = null; if (r) r(); }
+  if (consentResolve) { const r = consentResolve; consentResolve = null; r(false); }
+}
+$('#csOk').addEventListener('click', () => { LS.set('odo.aiOk', true); const r = consentResolve; consentResolve = null; closeSheets(); if (r) r(true); });
+$('#csNo').addEventListener('click', closeSheets);
+
+/* ---------- how the dreamer appears in the pictures ---------- */
+// Stored on the account (auth user metadata), so it follows you to every device.
+function lookOf() { const m = state.user && state.user.user_metadata; return (m && m.odo_look) || (state.user ? LS.get('odo.look.' + state.user.id, null) : null); }
+function lookWho(l) { return l && l.as === 'woman' ? 'a woman' : l && l.as === 'man' ? 'a man' : ''; }
+function lookLine() {
+  const l = lookOf(); if (!l) return '';
+  const who = lookWho(l), note = String(l.note || '').trim();
+  if (who) return `The dreamer (written as "I" or "me") is ${who}${note ? ' (' + note + ')' : ''}. Always draw the dreamer as ${who}.`;
+  return note ? `The dreamer (written as "I" or "me") looks like this: ${note}.` : '';
+}
+function lookSig() { const t = lookLine(); return t ? '\n#' + t : ''; }
+async function saveLook(l) {
+  const before = lookSig();
+  l = { as: ['woman', 'man', 'open'].includes(l.as) ? l.as : 'open', note: String(l.note || '').trim().slice(0, 120) };
+  if (state.user) LS.set('odo.look.' + state.user.id, l);
+  if (sb && state.user) {
+    try { const { data, error } = await sb.auth.updateUser({ data: { odo_look: l } }); if (!error && data && data.user) state.user = data.user; } catch (e) {}
+    if (state.user) state.user.user_metadata = Object.assign({}, state.user.user_metadata, { odo_look: l });
+  }
+  return before !== lookSig();
+}
+let lookAsk = null, lookResolve = null;
+function askLook() {
+  if (lookOf() || !state.user) return Promise.resolve();
+  if (lookAsk) return lookAsk;
+  lookAsk = new Promise(res => {
+    lookResolve = res;
+    $('#lkSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    $('#lkNote').value = ''; $('#lkOk').disabled = true;
+    $('#sheetBg').hidden = false; $('#lookSheet').hidden = false;
+  });
+  return lookAsk;
+}
+$('#lkSeg').addEventListener('click', e => {
+  const b = e.target.closest('button[data-as]'); if (!b) return;
+  $('#lkSeg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); $('#lkOk').disabled = false;
+});
+$('#lkOk').addEventListener('click', async () => {
+  const b = $('#lkSeg').querySelector('button[aria-pressed="true"]'); if (!b) return;
+  $('#lkOk').disabled = true;
+  await saveLook({ as: b.dataset.as, note: $('#lkNote').value });
+  $('#lookSheet').hidden = true; $('#sheetBg').hidden = true;
+  const r = lookResolve; lookResolve = null; lookAsk = null; if (r) r();
+});
+// Changing how you look repaints every dream, one at a time, in the background.
+let repainting = false;
+async function repaintAll() {
+  if (repainting) return; repainting = true;
+  try { for (const d of userDreams()) { const cur = getDream(d.id); if (canPaint(cur) && !framesValid(cur)) await paintDream(cur.id); } } finally { repainting = false; }
+}
+async function applyLook(l) {
+  if (!state.user) return;
+  const changed = await saveLook(l); renderProfile();
+  if (changed) { toast('Saved. Repainting your dreams to match.'); repaintAll(); } else toast('Saved');
+}
+$('#profLookSeg').addEventListener('click', e => { const b = e.target.closest('button[data-as]'); if (b) applyLook({ as: b.dataset.as, note: $('#profLookNote').value }); });
+$('#profLookNote').addEventListener('change', () => applyLook({ as: (lookOf() || {}).as || 'open', note: $('#profLookNote').value }));
+$('#sheetBg').addEventListener('click', closeSheets);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheetBg').hidden) closeSheets(); });
+
+/* ---------- boot ---------- */
+const startTab = ['record','journal','patterns'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'record';
+idleStatus(); onTextChange(); show(startTab);
+requestAnimationFrame(loop);
+initStore();
+if (!hasClaude && location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+})();
+</script>
+
+</body>
+</html>

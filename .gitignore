@@ -1,0 +1,10 @@
+.DS_Store
+.vercel
+node_modules/
+ios/www/
+ios/ios/App/App/public/
+ios/ios/App/Pods/
+xcuserdata/
+DerivedData/
+.env
+.env.*
