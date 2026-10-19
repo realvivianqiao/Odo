@@ -25,6 +25,9 @@ Live at **https://odo3.vercel.app**
 - **Long calls:** writing and reading take about a minute. The functions answer immediately and send a
   keep-alive space every 5 seconds, and they file each finished result in `dream_results`. If the
   phone drops the connection (app switched away, screen locked), the app collects the result from there.
+- **Patterns:** the Patterns tab sends all your dreams (up to 30) to the same model in one pass and asks what
+  repeats in meaning: threads, recurring people under any spelling, places and things, feelings, and what changed lately.
+  Each item lists the exact dreams it comes from. It refreshes when you add or edit a dream (result filed as `patterns-<user id>`).
 - **How you appear:** Profile → *In your dreams* (woman / man / open, plus an optional description).
   Saved on the account and added to every picture prompt.
 

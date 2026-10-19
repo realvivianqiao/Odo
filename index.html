@@ -226,6 +226,16 @@ body[data-tab="film"] .app{padding-bottom:calc(30px + env(safe-area-inset-bottom
 .stack img:first-child{margin-left:0}
 .count{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
 .feel{padding:14px;display:flex;flex-direction:column;gap:12px}
+.pat .row{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:14px 16px}
+.pat .row .top{display:flex;align-items:baseline;gap:10px}
+.pat .row .c{font-size:16.5px;font-weight:650;flex:1;min-width:0}
+.pat .row .count{font-size:13px;color:var(--muted);white-space:nowrap}
+.pat .row .s{display:block;margin:0;font-size:15px;line-height:1.52;color:rgba(255,255,255,.74)}
+.pat .stack{margin-top:6px}
+.pat .stack img{width:34px;height:48px}
+.feel .tag small{margin-left:6px;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.read .meta{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--faint)}
+.read .meta button{margin-left:auto;font-weight:600;color:var(--muted)}
 .feelbar{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px}
 .foot{margin:18px 4px 0;font-size:13px;color:var(--faint)}
 .sheet-bg{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.6);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
@@ -406,10 +416,15 @@ body[data-tab="film"] .app{padding-bottom:calc(30px + env(safe-area-inset-bottom
   <section class="view" id="view-patterns" hidden aria-labelledby="patternsTitle">
     <div class="head"><h1 class="large" id="patternsTitle">Patterns</h1></div>
     <div class="stats" id="stats"></div>
+    <h2 class="card-h">Across your dreams</h2>
+    <div class="card read" id="patRead" aria-live="polite"></div>
+    <div id="patThreadsWrap" hidden><h2 class="card-h">Threads</h2><ul class="card rows pat" id="patThreads"></ul></div>
+    <div id="patFigWrap" hidden><h2 class="card-h">Who keeps showing up</h2><ul class="card rows pat" id="patFigs"></ul></div>
+    <div id="patMotifWrap" hidden><h2 class="card-h">Places and things that return</h2><ul class="card rows pat" id="patMotifs"></ul></div>
     <h2 class="card-h">Last 5 weeks</h2>
     <div class="card cal"><div class="calgrid" id="calgrid"></div><div class="legend" id="legend"></div></div>
-    <h2 class="card-h">Recurring</h2>
-    <ul class="card rows" id="recur"></ul>
+    <div id="recurWrap"><h2 class="card-h">Recurring</h2>
+    <ul class="card rows" id="recur"></ul></div>
     <div id="feelWrap"><h2 class="card-h">Feelings</h2><div class="card feel" id="feel"></div></div>
     <p class="foot" id="foot"></p>
   </section>
@@ -1624,9 +1639,10 @@ $('#exportBtn').addEventListener('click', async () => {
 });
 
 /* ---------- dreams ---------- */
-function setFilter(kind, value) { state.filter = { kind, value }; state.query = ''; $('#search').value = ''; show('journal'); }
+function setFilter(kind, value, ids) { state.filter = { kind, value, ids: ids || null }; state.query = ''; $('#search').value = ''; show('journal'); }
 function matches(d) {
-  if (state.filter) { const { kind, value } = state.filter, n = normTag(value); if (!(d[kind] || []).some(v => normTag(v) === n)) return false; }
+  if (state.filter && state.filter.ids) { if (!state.filter.ids.includes(d.id)) return false; }
+  else if (state.filter) { const { kind, value } = state.filter, n = normTag(value); if (!(d[kind] || []).some(v => normTag(v) === n)) return false; }
   const q = state.query.trim().toLowerCase(); if (!q) return true;
   const hay = [d.title, d.logline, d.transcript, d.mood, ...(d.people || []), ...(d.places || []), ...(d.symbols || []), ...(d.emotions || []), ...(d.scenes || []).map(s => s.caption)].join(' ').toLowerCase();
   return q.split(/\s+/).every(w => hay.includes(w));
@@ -1691,6 +1707,8 @@ function renderPatterns() {
   }
   const lg = $('#legend'); lg.innerHTML = '';
   [...used].forEach(m => { const s = document.createElement('span'); s.innerHTML = `<span class="dot" style="background:${(MOODS[m] || MOODS.eerie).c}"></span>`; s.append(cap1(m)); lg.appendChild(s); });
+  const pd = renderPatRead(ds);
+  $('#recurWrap').hidden = !!(pd && pd.threads.length);
   const rec = [...ppl, ...plc, ...sym].filter(x => x.n > 1).sort((a, b) => b.n - a.n).slice(0, 6), rc = $('#recur'); rc.innerHTML = '';
   if (!rec.length) rc.appendChild(row('<span class="row"><span></span><span class="c" style="color:var(--muted)">Nothing repeats yet. People and places that show up twice land here.</span><span></span></span>'));
   rec.forEach(e => {
@@ -1700,8 +1718,16 @@ function renderPatterns() {
     b.querySelector('.c').textContent = cap1(e.label); b.querySelector('.s').textContent = { people: 'Person', places: 'Place', symbols: 'Thing' }[e.kind]; b.querySelector('.count').textContent = `${e.n}×`;
     b.addEventListener('click', () => setFilter(e.kind, e.label)); li.appendChild(b); rc.appendChild(li);
   });
-  const feel = $('#feel'); feel.innerHTML = ''; $('#feelWrap').hidden = !emo.length;
-  if (emo.length) {
+  const feel = $('#feel'); feel.innerHTML = ''; $('#feelWrap').hidden = !emo.length && !(pd && pd.feelings.length);
+  if (pd && pd.feelings.length) {
+    const tones = ['#FFFFFF', 'rgba(255,255,255,.7)', 'rgba(255,255,255,.48)', 'rgba(255,255,255,.3)', 'rgba(255,255,255,.18)'];
+    const top = pd.feelings.slice(0, 5), total = top.reduce((n, e) => n + e.dreams.length, 0);
+    const bar = document.createElement('div'); bar.className = 'feelbar';
+    top.forEach((e, i) => { const x = document.createElement('i'); x.style.flex = String(e.dreams.length); x.style.background = tones[i]; bar.appendChild(x); });
+    const chips = document.createElement('div'); chips.className = 'chips';
+    top.forEach((e, i) => { const b = document.createElement('button'); b.className = 'tag'; b.innerHTML = `<span class="dot" style="background:${tones[i]};margin-right:6px"></span>`; b.append(e.name); const n = document.createElement('small'); n.textContent = String(e.dreams.length); b.append(n); b.addEventListener('click', () => setFilter('feeling', e.name, e.dreams)); chips.appendChild(b); });
+    feel.append(bar, chips);
+  } else if (emo.length) {
     const tones = ['#FFFFFF', 'rgba(255,255,255,.7)', 'rgba(255,255,255,.48)', 'rgba(255,255,255,.3)', 'rgba(255,255,255,.18)'];
     const top = emo.slice(0, 5), total = top.reduce((n, e) => n + e.n, 0);
     const bar = document.createElement('div'); bar.className = 'feelbar';
@@ -1711,6 +1737,135 @@ function renderPatterns() {
     feel.append(bar, chips);
   }
   $('#foot').textContent = store.mode === 'db' ? 'Your dreams are private and sync wherever you open Odo in Claude.' : store.mode === 'local' ? 'Your dreams are saved in this browser.' : '';
+}
+
+/* ---------- patterns: one reading across all your dreams ---------- */
+// The same model reads every dream together and names what repeats in meaning (school, being judged,
+// the same person under different spellings), with the exact dreams each pattern comes from.
+const pat = { busy: false, data: null, at: '', n: 0, tried: false };
+const patKey = () => 'odo.patterns.' + (state.user ? state.user.id : 'here');
+const patId = () => state.user ? 'patterns-' + state.user.id : '';
+function patDreams() { return userDreams().filter(d => !d.locked && !d.sample && d.title && (d.transcript || d.story)); }
+function buildPatternPrompt(ds) {
+  const list = ds.slice(0, 30).map(d => [
+    `[${d.id}] ${d.dreamDate || ''} · "${d.title}" · mood ${d.mood || ''}`,
+    `Story: ${String(d.story || d.logline || d.transcript || '').replace(/\s+/g, ' ').slice(0, 700)}`,
+    `People: ${(d.people || []).join(', ') || '-'}; Places: ${(d.places || []).join(', ') || '-'}; Things: ${(d.symbols || []).join(', ') || '-'}; Feelings: ${(d.emotions || []).join(', ') || '-'}`,
+    d.reading && d.reading.headline ? `Reading: ${d.reading.headline}` : ''
+  ].filter(Boolean).join('\n')).join('\n\n');
+  return `You are the pattern reader inside Odo, a dream journal. Below are one person's dreams, newest first, each with an id in brackets. Find what genuinely repeats across them.
+
+How to read:
+- Only name a pattern that shows up in at least two dreams, and list exactly which dream ids it appears in. Never invent one.
+- Look for repeats in meaning, not just wording: the same kind of place under different names (classroom, campus, canteen are all school), the same person under different spellings or misheard names, the same situation (being tested, judged, chosen or left out), the same feeling.
+- Be specific: name the concrete images and moments from the dreams. Never write a sentence that could fit anyone's dreams.
+- Dreams mostly rework recent feelings, wants, worries and relationships. Say what a pattern might be about, lightly hedged. No therapy-speak, no diagnoses, no predictions, no advice about their life. Never mention being an AI.
+- Write in English, in plain, natural sentences. No closing epigrams. Keep personal names as written; translate family words (妈妈 → Mom).
+- In headline, summary, insight, note and shift, refer to a dream by its title or a short description of it, never by its id. Ids go only in the "dreams" lists.
+
+Reply with only JSON in this shape:
+{"headline":"","summary":"","threads":[{"title":"","insight":"","dreams":[""]}],"figures":[{"name":"","note":"","dreams":[""]}],"motifs":[{"name":"","note":"","dreams":[""]}],"feelings":[{"name":"","dreams":[""]}],"shift":"","question":""}
+- headline: the through-line across these dreams, one sentence, at most 22 words.
+- summary: 2 to 4 sentences that back it up with specific images from specific dreams.
+- threads: 2 to 5 recurring situations or themes. title: 2 to 6 words. insight: 1 or 2 sentences naming the concrete moments that make it recur and what it might be about. dreams: the ids where it appears (at least 2).
+- figures: people who appear in at least 2 dreams. Merge spelling variants into one person and mention the variants in parentheses. note: their role across the dreams in one short sentence.
+- motifs: places, objects or settings that return, grouped by meaning. note: the forms they took, in a few words.
+- feelings: 2 to 5 emotional families that recur (for example "being judged" or "unease"), each with the ids where they appear.
+- shift: one sentence on how the most recent dreams differ from the earlier ones, or "" if nothing clear.
+- question: one question for the dreamer to sit with about the pattern as a whole.
+Use empty arrays when nothing qualifies.
+
+Dreams:
+${list}`;
+}
+function normPatterns(raw, ids) {
+  if (!raw || typeof raw !== 'object') throw new Error('shape');
+  const known = new Set(ids);
+  const titleOf = id => { const d = getDream(id); return d && d.title ? `\u201c${d.title}\u201d` : 'one dream'; };
+  const clean = t => t.replace(/\[?\b(d[a-z0-9]{8,20})\b\]?/g, (m, id) => known.has(id) ? titleOf(id) : m).replace(/\s+([,.;])/g, '$1');
+  const rdStr0 = rdStr, rdStr1 = (v, n) => clean(rdStr0(v, n * 2)).slice(0, n);
+  const dl = a => [...new Set((Array.isArray(a) ? a : []).map(x => String(x).replace(/[\[\]\s]/g, '')).filter(x => known.has(x)))];
+  const items = (a, f, max) => (Array.isArray(a) ? a : []).map(f).filter(x => x.dreams.length >= 2).slice(0, max);
+  const out = {
+    headline: rdStr1(raw.headline, 220), summary: rdStr1(raw.summary, 900), shift: rdStr1(raw.shift, 300), question: rdStr1(raw.question, 300),
+    threads: items(raw.threads, t => ({ title: rdStr(t && t.title, 60), insight: rdStr1(t && t.insight, 400), dreams: dl(t && t.dreams) }), 5).filter(t => t.title),
+    figures: items(raw.figures, t => ({ name: rdStr(t && t.name, 60), note: rdStr1(t && t.note, 200), dreams: dl(t && t.dreams) }), 6).filter(t => t.name),
+    motifs: items(raw.motifs, t => ({ name: rdStr(t && t.name, 60), note: rdStr1(t && t.note, 200), dreams: dl(t && t.dreams) }), 6).filter(t => t.name),
+    feelings: items(raw.feelings, t => ({ name: rdStr(t && t.name, 40), dreams: dl(t && t.dreams) }), 5).filter(t => t.name)
+  };
+  if (!out.headline && !out.threads.length) throw new Error('empty');
+  return out;
+}
+function patCache() { const c = LS.get(patKey(), null); return c && c.text ? c : null; }
+function patStale(ds) {
+  if (!pat.data) return true;
+  const newest = ds.reduce((m, d) => { const t = d.editedAt && d.editedAt > (d.createdAt || '') ? d.editedAt : (d.createdAt || ''); return t > m ? t : m; }, '');
+  return newest > pat.at || (pat.n && pat.n !== ds.length);
+}
+function usePatText(text, at, n, ds) {
+  try { pat.data = normPatterns(parseJsonText(text), ds.map(d => d.id)); pat.at = at; pat.n = n || 0; return true; } catch (e) { return false; }
+}
+async function loadPatterns(force) {
+  const ds = patDreams();
+  if (pat.busy || ds.length < 2) return;
+  if (!pat.data) { const c = patCache(); if (c) usePatText(c.text, c.at, c.n, ds); }
+  if (!pat.data && !hasClaude) { const f = await filedResult('reading', patId()); if (f && f.text) usePatText(f.text, f.updated_at, 0, ds); }
+  if (!force && !patStale(ds)) { if (state.tab === 'patterns') renderPatterns(); return; }
+  if (!hasClaude && !(store.mode === 'supa' && state.user)) return;
+  if (!hasClaude && !LS.get('odo.aiOk', false)) { if (!force || !(await askConsent())) { if (state.tab === 'patterns') renderPatterns(); return; } }
+  pat.busy = true; pat.tried = true; if (state.tab === 'patterns') renderPatterns();
+  const started = new Date().toISOString();
+  let text = '';
+  try {
+    if (hasClaude) { const sample = await sampleP; if (sample) text = JSON.stringify(await sample.json(buildPatternPrompt(ds), { modelTier: 'default' })); }
+    else { const r = await askModel('interpret', 'reading', patId(), buildPatternPrompt(ds)); text = r.text || ''; if (r.locked) toast('That\u2019s today\u2019s readings. More tomorrow.'); }
+  } catch (e) {}
+  pat.busy = false;
+  if (text && usePatText(text, started, ds.length, ds)) LS.set(patKey(), { text, at: started, n: ds.length });
+  else if (force) toast('Couldn\u2019t read your patterns just now. Try again in a moment.');
+  if (state.tab === 'patterns') renderPatterns();
+}
+function renderPatRead(ds) {
+  const box = $('#patRead'); box.innerHTML = '';
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const own = patDreams();
+  if (own.length < 2) { box.append(el('p', null, 'Patterns start once you\u2019ve saved two dreams. Odo reads them together and points out what keeps coming back.')); ['#patThreadsWrap', '#patFigWrap', '#patMotifWrap'].forEach(x => { $(x).hidden = true; }); return null; }
+  if (!pat.data && !pat.busy && !pat.tried) loadPatterns(false);
+  const d = pat.data;
+  if (!d) {
+    if (pat.busy) { const w = el('p', 'wait'); w.append(el('i'), `Reading your ${own.length} dreams together\u2026 about a minute.`); box.append(w); }
+    else { const b = el('button', 'btn glass', 'Find my patterns'); b.addEventListener('click', () => loadPatterns(true)); box.append(b); }
+    ['#patThreadsWrap', '#patFigWrap', '#patMotifWrap'].forEach(x => { $(x).hidden = true; });
+    return null;
+  }
+  if (d.headline) box.append(el('p', 'hl', d.headline));
+  if (d.summary) box.append(el('p', null, d.summary));
+  if (d.shift) { box.append(el('span', 'lab', 'Lately'), el('p', null, d.shift)); }
+  if (d.question) box.append(el('span', 'lab', 'Something to sit with'), el('div', 'q', d.question));
+  const meta = el('div', 'meta');
+  if (pat.busy) { const w = el('span', 'wait'); w.append(el('i'), 'Updating with your latest dreams\u2026'); meta.append(w); }
+  else {
+    meta.append(el('span', null, `Across ${pat.n || own.length} dreams`));
+    const b = el('button', null, 'Refresh'); b.addEventListener('click', () => loadPatterns(true)); meta.append(b);
+    if (patStale(own)) loadPatterns(false);
+  }
+  box.append(meta);
+  const byId = new Map(ds.map(x => [x.id, x]));
+  const list = (wrap, ul, items, body, kind) => {
+    $(wrap).hidden = !items.length; const u = $(ul); u.innerHTML = '';
+    items.forEach(it => {
+      const li = document.createElement('li'), b = document.createElement('button'); b.className = 'row';
+      b.innerHTML = '<span class="top"><span class="c"></span><span class="count"></span></span><span class="s"></span><span class="stack"></span>';
+      it.dreams.map(id => byId.get(id)).filter(Boolean).slice(0, 5).forEach(x => { const im = document.createElement('img'); im.alt = ''; im.src = thumb(x, 120); b.querySelector('.stack').appendChild(im); });
+      b.querySelector('.c').textContent = it.title || it.name; b.querySelector('.s').textContent = body(it); b.querySelector('.count').textContent = `${it.dreams.length} dreams`;
+      b.addEventListener('click', () => setFilter(kind, it.title || it.name, it.dreams));
+      li.appendChild(b); u.appendChild(li);
+    });
+  };
+  list('#patThreadsWrap', '#patThreads', d.threads, it => it.insight, 'thread');
+  list('#patFigWrap', '#patFigs', d.figures, it => it.note, 'person');
+  list('#patMotifWrap', '#patMotifs', d.motifs, it => it.note, 'motif');
+  return d;
 }
 
 /* ---------- record copy ---------- */
