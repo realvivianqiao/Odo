@@ -2301,6 +2301,22 @@ idleStatus(); onTextChange(); show(startTab);
 requestAnimationFrame(loop);
 initStore();
 if (!hasClaude && location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+/* ---------- updates: pick up a new version when you come back to the app ---------- */
+// A home-screen app on iPhone can stay open for days, so on returning after 30s+ away, check whether the
+// site changed and reload, unless something is in progress (recording, making, saving, editing, a draft).
+async function siteTag() { try { const r = await fetch('/index.html', { method: 'HEAD', cache: 'no-store' }); return r.ok ? (r.headers.get('etag') || r.headers.get('last-modified') || '') : null; } catch (e) { return null; } }
+if (!hasClaude && location.protocol === 'https:') {
+  let buildTag = null, hiddenAt = 0;
+  siteTag().then(t => { buildTag = t; });
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (!buildTag || Date.now() - hiddenAt < 30000) return;
+    const t = await siteTag();
+    const busy = makingOn || voice.mode === 'listening' || P.rec || !$('#wordsEdit').hidden || !!ta.value.trim() || pat.busy || frames.busy.size > 0;
+    if (t && t !== buildTag && !busy) location.reload();
+  });
+}
 })();
 </script>
 
